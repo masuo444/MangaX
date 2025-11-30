@@ -515,7 +515,8 @@ const AdminView = ({ onBack, userId, t }) => {
 };
 
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState({ uid: 'guest' });
+  const [authReady, setAuthReady] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
   const [view, setView] = useState('home');
   const [showPremiumModal, setShowPremiumModal] = useState(false);
@@ -530,21 +531,20 @@ export default function App() {
   const t = (key) => RESOURCES[lang][key] || key;
   const toggleLang = () => setLang(prev => prev === 'ja' ? 'en' : 'ja');
 
-  useEffect(() => { const initAuth = async () => { if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) { await signInWithCustomToken(auth, __initial_auth_token); } else { await signInAnonymously(auth); } }; initAuth(); const unsubscribe = onAuthStateChanged(auth, async (u) => { setUser(u); if (u) { setHistory(getRecentHistory(u.uid)); const userRef = doc(db, 'artifacts', appId, 'users', u.uid, 'profile', 'status'); const docSnap = await getDoc(userRef); if (docSnap.exists() && docSnap.data().isPremium) { setIsPremium(true); } } }); return () => unsubscribe(); }, []);
-  const handleSubscribe = async () => { if (!user) return; const userRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'status'); await setDoc(userRef, { isPremium: true }, { merge: true }); setIsPremium(true); setShowPremiumModal(false); alert("Premium activated."); };
-  useEffect(() => { if (!user) return; const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'series'), orderBy('updatedAt', 'desc')); onSnapshot(q, (snap) => setSeriesData(snap.docs.map(d => ({ id: d.id, ...d.data() })))); }, [user]);
-  useEffect(() => { if (!user || !selectedSeries) return; const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'chapters')); onSnapshot(q, (snap) => setChaptersData(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.seriesId === selectedSeries.id))); }, [user, selectedSeries]);
+  useEffect(() => { const initAuth = async () => { if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) { await signInWithCustomToken(auth, __initial_auth_token); } else { await signInAnonymously(auth); } }; initAuth(); const unsubscribe = onAuthStateChanged(auth, async (u) => { setUser(u || { uid: 'guest' }); setAuthReady(true); if (u) { setHistory(getRecentHistory(u.uid)); const userRef = doc(db, 'artifacts', appId, 'users', u.uid, 'profile', 'status'); const docSnap = await getDoc(userRef); if (docSnap.exists() && docSnap.data().isPremium) { setIsPremium(true); } } else { setHistory([]); setIsPremium(false); } }); return () => unsubscribe(); }, []);
+  const handleSubscribe = async () => { if (!authReady || !user?.uid) { alert("Please wait for sign-in."); return; } const userRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'status'); await setDoc(userRef, { isPremium: true }, { merge: true }); setIsPremium(true); setShowPremiumModal(false); alert("Premium activated."); };
+  useEffect(() => { if (!authReady) return; const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'series'), orderBy('updatedAt', 'desc')); onSnapshot(q, (snap) => setSeriesData(snap.docs.map(d => ({ id: d.id, ...d.data() })))); }, [authReady]);
+  useEffect(() => { if (!authReady || !selectedSeries) return; const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'chapters')); onSnapshot(q, (snap) => setChaptersData(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.seriesId === selectedSeries.id))); }, [authReady, selectedSeries]);
   const goDetail = (series) => { setSelectedSeries(series); setView('detail'); };
-  const goReader = (chapter) => { saveHistory(user.uid, selectedSeries.id, chapter.id, chapter.number, selectedSeries.title); setHistory(getRecentHistory(user.uid)); setSelectedChapter(chapter); setView('reader'); };
+  const goReader = (chapter) => { const uid = user?.uid || 'guest'; saveHistory(uid, selectedSeries.id, chapter.id, chapter.number, selectedSeries.title); setHistory(getRecentHistory(uid)); setSelectedChapter(chapter); setView('reader'); };
   const publicSeries = seriesData.filter(s => s.status === 'approved');
   const rankingData = [...publicSeries].sort((a, b) => (b.totalLikes || 0) - (a.totalLikes || 0)); 
   const displayData = homeTab === 'ranking' ? rankingData : publicSeries;
-  if (!user) return <div className="flex h-screen items-center justify-center text-orange-600 font-bold animate-pulse">Loading...</div>;
 
   return (
     <div className="bg-white min-h-screen text-gray-900 font-sans max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-gray-100">
       <PremiumModal isOpen={showPremiumModal} onClose={()=>setShowPremiumModal(false)} onSubscribe={handleSubscribe} t={t} />
-      {view === 'admin' ? ( <AdminView onBack={() => setView('home')} userId={user.uid} t={t} /> ) : view === 'reader' && selectedChapter ? ( <ReaderView chapter={selectedChapter} series={selectedSeries} onBack={() => setView('detail')} t={t} isPremium={isPremium} onOpenPremium={() => setShowPremiumModal(true)} /> ) : view === 'store' && selectedSeries ? ( <SupportStoreView series={selectedSeries} onBack={() => setView('detail')} userId={user.uid} chapters={chaptersData} t={t} /> ) : view === 'partners' ? ( <PlatformSponsorView onBack={() => setView('home')} t={t} /> ) : view === 'detail' && selectedSeries ? ( <DetailView series={selectedSeries} chapters={chaptersData} onBack={() => setView('home')} onRead={goReader} history={history} onOpenStore={()=>setView('store')} t={t} /> ) : (
+      {view === 'admin' ? ( <AdminView onBack={() => setView('home')} userId={user?.uid || 'guest'} t={t} /> ) : view === 'reader' && selectedChapter ? ( <ReaderView chapter={selectedChapter} series={selectedSeries} onBack={() => setView('detail')} t={t} isPremium={isPremium} onOpenPremium={() => setShowPremiumModal(true)} /> ) : view === 'store' && selectedSeries ? ( <SupportStoreView series={selectedSeries} onBack={() => setView('detail')} userId={user?.uid || 'guest'} chapters={chaptersData} t={t} /> ) : view === 'partners' ? ( <PlatformSponsorView onBack={() => setView('home')} t={t} /> ) : view === 'detail' && selectedSeries ? ( <DetailView series={selectedSeries} chapters={chaptersData} onBack={() => setView('home')} onRead={goReader} history={history} onOpenStore={()=>setView('store')} t={t} /> ) : (
         <div className="pb-20">
             <header className="bg-white text-gray-900 px-4 py-3 flex justify-between items-center sticky top-0 z-30 border-b border-gray-100/80 backdrop-blur-md bg-white/90">
                 <div className="flex items-center gap-2"><div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${isPremium ? 'bg-yellow-500 text-black' : 'bg-gray-200 text-gray-500'}`}>{isPremium ? <Crown size={16} /> : <User size={16} />}</div><div><div className="text-[10px] text-gray-400">{isPremium ? t('subscribed') : t('guest_label')}</div><div className="text-xs font-bold">{t('guest_name')}</div></div></div>

@@ -480,8 +480,15 @@ const compressImage = (file) =>
     };
   });
 
-const translateImageWithGemini = async (base64Image, targetLang, isPremium) => {
+const translateImageWithGemini = async (base64Image, targetLang, isPremium, isDemo) => {
   if (!isPremium) throw new Error('PREMIUM_REQUIRED');
+  if (isDemo) {
+    await new Promise((r) => setTimeout(r, 500));
+    return [
+      { original: 'デモモード', translated: 'Demo mode response' },
+      { original: 'サーバーキー未使用', translated: 'No server key in demo' },
+    ];
+  }
   if (!GEMINI_API_KEY) {
     await new Promise((r) => setTimeout(r, 1000));
     return [
@@ -490,28 +497,13 @@ const translateImageWithGemini = async (base64Image, targetLang, isPremium) => {
     ];
   }
   try {
-    const inlineDataPart = base64Image.split(',')[1];
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { text: 'Extract text.' },
-                { inlineData: { mimeType: 'image/jpeg', data: inlineDataPart } },
-              ],
-            },
-          ],
-          generationConfig: { responseMimeType: 'application/json' },
-        }),
-      }
-    );
+    const response = await fetch('/api/gemini', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: base64Image, targetLang }),
+    });
     if (!response.ok) throw new Error('API Error');
-    const data = await response.json();
-    return JSON.parse(data.candidates?.[0]?.content?.parts?.[0]?.text);
+    return await response.json();
   } catch (e) {
     console.error(e);
     throw e;
@@ -1192,7 +1184,7 @@ const ReaderView = ({ chapter, series, onBack, t, isPremium, onOpenPremium, isDe
     setTranslating(true);
     setShowTranslateSheet(true);
     try {
-      const result = await translateImageWithGemini(pages[0], 'en', isPremium);
+      const result = await translateImageWithGemini(pages[0], 'en', isPremium, isDemo);
       setTranslationData(result);
     } catch (e) {
       alert(t('translation_error'));

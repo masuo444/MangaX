@@ -6,19 +6,27 @@ import { getFirestore, collection, addDoc, query, onSnapshot, orderBy, where, do
 import { Helmet, HelmetProvider } from 'react-helmet-async'; // SEO Library
 
 // --- Firebase Configuration & Initialization ---
+const requiredEnv = (key, fallback = '') => {
+    const val = import.meta.env[key] ?? fallback;
+    if (!val) {
+        throw new Error(`Missing env ${key}`);
+    }
+    return val;
+};
+
 const firebaseConfig = {
-    apiKey: "AIzaSyB82J_SX1vPJBYY8wrUvHt2yQfCm7iUgs4",
-    authDomain: "manga-x-b0355.firebaseapp.com",
-    projectId: "manga-x-b0355",
-    storageBucket: "manga-x-b0355.firebasestorage.app",
-    messagingSenderId: "359210837838",
-    appId: "1:359210837838:web:c6b345984babdf88b0201f",
-    measurementId: "G-KXJNZ839C9"
+    apiKey: requiredEnv('VITE_FIREBASE_API_KEY'),
+    authDomain: requiredEnv('VITE_FIREBASE_AUTH_DOMAIN'),
+    projectId: requiredEnv('VITE_FIREBASE_PROJECT_ID'),
+    storageBucket: requiredEnv('VITE_FIREBASE_STORAGE_BUCKET'),
+    messagingSenderId: requiredEnv('VITE_FIREBASE_MESSAGING_SENDER_ID'),
+    appId: requiredEnv('VITE_FIREBASE_APP_ID'),
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || undefined
 };
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = "manga-x-b0355";
+const appId = requiredEnv('VITE_APP_ID', firebaseConfig.projectId);
 
 // --- Gemini API Configuration ---
 const apiKey = ""; 

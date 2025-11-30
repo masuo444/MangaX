@@ -1,16 +1,44 @@
-# React + Vite
+# MangaX (Vite + React)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This project is a Vite + React app for the MangaX prototype.
 
-Currently, two official plugins are available:
+## Setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+1) Install deps  
+```bash
+npm install
+```
 
-## React Compiler
+2) Env vars  
+Copy `.env.example` to `.env` and fill with your Firebase project values. On Vercel, add the same keys in Project Settings → Environment Variables (Production/Preview):
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_STORAGE_BUCKET`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`
+- `VITE_FIREBASE_APP_ID`
+- `VITE_FIREBASE_MEASUREMENT_ID`
+- `VITE_APP_ID`
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+3) Run dev server  
+```bash
+npm run dev
+```
 
-## Expanding the ESLint configuration
+## Firebase security rules
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Included baseline rules:
+- `firestore.rules`: public reads; writes require auth with basic ownership checks (series.createdBy, requests.userId, profile owner). Deletes are mostly disabled.
+- `storage.rules`: public reads under `/public`, writes require auth; `/users/{userId}` is owner-only.
+
+Deploy rules (adjust to your policy first):
+```bash
+firebase deploy --only firestore:rules,storage:rules
+```
+
+> Note: tighten rules further once you move critical writes to server-side (Cloud Functions / backend). Avoid keeping client-only writes for payments/sensitive operations.
+
+## Build & Deploy
+
+Vercel detects Vite automatically. Build command `npm run build`, output `dist`.  
+Large bundle warning can be silenced by bumping `build.chunkSizeWarningLimit` in `vite.config.js` or by code-splitting.

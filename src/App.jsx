@@ -1,35 +1,52 @@
 import React, { useState, useEffect, useRef } from 'react';
+// 必要なライブラリ: npm install lucide-react firebase react-helmet-async
 import { BookOpen, Home, Search, User, Star, Share2, ChevronLeft, Calendar, Plus, Upload, Trash2, Settings, Image as ImageIcon, Menu, ChevronRight, Clock, RotateCcw, X, Loader, DollarSign, Briefcase, Smile, ExternalLink, checkCircle, Crown, Lock, Heart, Flame, MessageCircle, Copy, Link as LinkIcon, Globe, Languages, Sparkles, Check, Trophy, Handshake, Building, AlertCircle, Wand2, FileText, Palette, MonitorPlay, FileCheck, Mail, Download, Smartphone } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, collection, addDoc, query, onSnapshot, orderBy, where, doc, updateDoc, deleteDoc, serverTimestamp, getDoc, setDoc, writeBatch, increment } from 'firebase/firestore';
-import { Helmet, HelmetProvider } from 'react-helmet-async'; // SEO Library
+import { Helmet, HelmetProvider } from 'react-helmet-async';
 
-// --- Firebase Configuration & Initialization ---
-const requiredEnv = (key, fallback = '') => {
-    const val = import.meta.env[key] ?? fallback;
-    if (!val) {
-        throw new Error(`Missing env ${key}`);
+// ==========================================
+// 🌍 本番環境向け設定エリア (ここだけ書き換えれば動きます)
+// ==========================================
+
+// 1. Firebaseコンソール > プロジェクトの設定 > マイアプリ
+// にある "const firebaseConfig = { ... }" の中身をここにコピペしてください。
+const FIREBASE_CONFIG = {
+  apiKey: "★ここにAPI Keyを貼り付け★",
+  authDomain: "★ここにAuth Domainを貼り付け★",
+  projectId: "★ここにProject IDを貼り付け★",
+  storageBucket: "★ここにStorage Bucketを貼り付け★",
+  messagingSenderId: "★ここにSender IDを貼り付け★",
+  appId: "★ここにApp IDを貼り付け★"
+};
+
+// 2. Gemini APIキー (翻訳機能を使いたい場合のみ。なければ空欄でOK)
+const GEMINI_API_KEY = "";
+
+// 3. アプリID (データベースの保存場所の名前。そのままでOK)
+const APP_ID = "mangax-prod-v1";
+
+// ==========================================
+// 👆 設定はこれだけです！ 👆
+// ==========================================
+
+
+// --- Initialization Logic ---
+let app, auth, db;
+let isConfigured = false;
+
+try {
+    // Check if config is set (and not the placeholder text)
+    if (FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.includes("★")) {
+        app = initializeApp(FIREBASE_CONFIG);
+        auth = getAuth(app);
+        db = getFirestore(app);
+        isConfigured = true;
     }
-    return val;
-};
-
-const firebaseConfig = {
-    apiKey: requiredEnv('VITE_FIREBASE_API_KEY'),
-    authDomain: requiredEnv('VITE_FIREBASE_AUTH_DOMAIN'),
-    projectId: requiredEnv('VITE_FIREBASE_PROJECT_ID'),
-    storageBucket: requiredEnv('VITE_FIREBASE_STORAGE_BUCKET'),
-    messagingSenderId: requiredEnv('VITE_FIREBASE_MESSAGING_SENDER_ID'),
-    appId: requiredEnv('VITE_FIREBASE_APP_ID'),
-    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || undefined
-};
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = requiredEnv('VITE_APP_ID', firebaseConfig.projectId);
-
-// --- Gemini API Configuration ---
-const apiKey = ""; 
+} catch (e) {
+    console.error("Firebase init error:", e);
+}
 
 // --- Translation Resources ---
 const RESOURCES = {
@@ -44,25 +61,14 @@ const RESOURCES = {
     author_note: "作者あとがき", finished_reading: "読み終わりました", back_to_detail: "詳細へ戻る",
     next_chapter: "次の話", prev_chapter: "前の話", chapter_list: "話一覧", work_detail: "作品詳細",
     support_title: "スポンサーになる", support_btn: "スポンサーになる",
-    // Premium
-    premium_plan: "プレミアムプラン",
-    premium_desc: "AI翻訳機能で、世界中の漫画をあなたの言葉で。",
-    premium_price: "月額 $5 (約750円)",
-    premium_benefit_1: "漫画内のセリフをAIが瞬時に翻訳",
-    premium_benefit_2: "広告非表示 (予定)",
-    premium_benefit_3: "作者への還元率アップ",
-    subscribe_btn: "今すぐ登録する",
-    subscribed: "プレミアム会員",
-    unlock_translate: "翻訳機能を使う (Premium)",
+    premium_plan: "プレミアムプラン", premium_desc: "AI翻訳機能で、世界中の漫画をあなたの言葉で。", premium_price: "月額 $5 (約750円)",
+    premium_benefit_1: "漫画内のセリフをAIが瞬時に翻訳", premium_benefit_2: "広告非表示 (予定)", premium_benefit_3: "作者への還元率アップ",
+    subscribe_btn: "今すぐ登録する", subscribed: "プレミアム会員", unlock_translate: "翻訳機能を使う (Premium)",
     ai_translate: "AI翻訳", translating: "AIが翻訳中...", translation_error: "翻訳できませんでした",
-    // Sponsor
-    plan_episode_title: "1話まるごとスポンサー",
-    plan_episode_desc: "あなたの広告を作品の「冒頭」と「巻末」に掲載。",
-    plan_episode_price_display: "$200 / 話",
+    plan_episode_title: "1話まるごとスポンサー", plan_episode_desc: "あなたの広告を作品の「冒頭」と「巻末」に掲載。", plan_episode_price_display: "$200 / 話",
     input_shopname: "表示名", input_url: "リンク先URL", input_images: "ロゴ画像", upload_logo: "ロゴをアップロード",
     select_chapter: "スポンサーになりたい話数を選択", sold_out: "SOLD OUT", available: "選択可能",
     purchase_confirm: "デモ決済: スポンサー枠を購入しますか？", purchase_complete: "購入完了！",
-    // Admin & Studio
     tab_latest: "新着・更新", tab_ranking: "人気ランキング",
     create_new_series: "連載を申請する", upload_chapter: "エピソードの投稿", title: "タイトル", author: "作者名", desc: "あらすじ", upload_images: "漫画の原稿", create: "申請", publish: "公開", uploading: "アップロード中...", cancel: "キャンセル", 
     admin_title: "クリエイター管理画面", tab_works: "投稿", tab_requests: "収益", tab_dashboard: "分析", tab_studio: "制作ツール",
@@ -70,29 +76,21 @@ const RESOURCES = {
     status_pending: "審査中", status_approved: "連載中", apply_msg: "連載申請を受け付けました。", free_registration: "クリエイター登録・連載申請は無料です",
     label_direction: "読む方向", dir_rtl: "右開き (日本など)", dir_ltr: "左開き (海外など)",
     label_language: "作品の言語", lang_ja: "日本語", lang_en: "英語",
-    // Manga X Studio
-    studio_title: "Manga X Studio",
-    studio_subtitle: "あなたの小説を、プロクオリティの漫画に。",
-    studio_desc: "原作テキストさえあれば、漫画化・翻訳・配信までワンストップでサポートします。",
-    input_script: "原作小説・あらすじ",
-    input_script_placeholder: "ここに物語を入力してください...",
+    studio_title: "Manga X Studio", studio_subtitle: "あなたの小説を、プロクオリティの漫画に。", studio_desc: "原作テキストさえあれば、漫画化・翻訳・配信までワンストップでサポートします。",
+    input_script: "原作小説・あらすじ", input_script_placeholder: "ここに物語を入力してください...",
     style_shonen: "少年漫画風", style_shojo: "少女漫画風", style_seinen: "劇画・青年誌風", style_webtoon: "Webtoon (カラー)",
-    label_style: "作画スタイル",
-    label_pages: "希望ページ数",
-    cost_per_page: "$20 (約3,000円) / ページ",
-    total_cost: "お見積もり合計",
-    order_btn: "契約内容の確認へ",
-    payment_btn: "同意して支払う",
-    contract_title: "制作委託契約および権利規定",
-    contract_agree: "上記契約内容および利用規約に同意します",
-    studio_step_1: "見積もり", studio_step_2: "契約", studio_step_3: "完了",
-    order_complete_title: "ご依頼ありがとうございます！",
-    order_complete_msg: "お支払いが確認できました。制作を開始いたします。\n\n今後は登録メールアドレスにて、担当編集者より直接ご連絡差し上げます。\n（納期目安：20ページの場合 約2週間）",
-    back_to_home: "ホームへ戻る",
-    // Marketing & PWA
-    install_app: "アプリをインストール",
-    install_desc: "ホーム画面に追加して、最新話を通知で受け取ろう！",
-    seo_desc: "MangaXは、世界中のインディーズ漫画が集まるクロスボーダープラットフォームです。"
+    label_style: "作画スタイル", label_pages: "希望ページ数", cost_per_page: "$20 (約3,000円) / ページ", total_cost: "お見積もり合計",
+    order_btn: "契約内容の確認へ", payment_btn: "同意して支払う", contract_title: "制作委託契約および権利規定",
+    contract_agree: "上記契約内容および利用規約に同意します", studio_step_1: "見積もり", studio_step_2: "契約", studio_step_3: "完了",
+    order_complete_title: "ご依頼ありがとうございます！", order_complete_msg: "お支払いが確認できました。制作を開始いたします。\n\n今後は登録メールアドレスにて、担当編集者より直接ご連絡差し上げます。\n（納期目安：20ページの場合 約2週間）", back_to_home: "ホームへ戻る",
+    install_app: "アプリをインストール", install_desc: "ホーム画面に追加して、最新話を通知で受け取ろう！", seo_desc: "MangaXは、世界中のインディーズ漫画が集まるクロスボーダープラットフォームです。",
+    config_error: "設定未完了", config_error_msg: "コード内の 'FIREBASE_CONFIG' にFirebaseのキーを設定してください。",
+    monthly_views: "月間ビュー",
+    total_revenue: "総収益",
+    global_readers: "海外読者",
+    become_sponsor: "スポンサーになる",
+    latest_ep: "最新話",
+    future_ep: "先行予約"
   },
   en: {
     app_name: "MangaX by FOMUS",
@@ -121,29 +119,21 @@ const RESOURCES = {
     status_pending: "In Review", status_approved: "Serialized", apply_msg: "Application submitted.", free_registration: "Registration is free.",
     label_direction: "Reading Direction", dir_rtl: "Right to Left (JP)", dir_ltr: "Left to Right (Global)",
     label_language: "Language", lang_ja: "Japanese", lang_en: "English",
-    // Manga X Studio
-    studio_title: "Manga X Studio",
-    studio_subtitle: "Turn your novel into professional Manga.",
-    studio_desc: "We provide one-stop support from text to manga creation using our proprietary tools.",
-    input_script: "Novel / Script",
-    input_script_placeholder: "Paste your story here...",
+    studio_title: "Manga X Studio", studio_subtitle: "Turn your novel into professional Manga.", studio_desc: "We provide one-stop support from text to manga creation using our proprietary tools.",
+    input_script: "Novel / Script", input_script_placeholder: "Paste your story here...",
     style_shonen: "Shonen Style", style_shojo: "Shojo Style", style_seinen: "Seinen / Realistic", style_webtoon: "Webtoon (Full Color)",
-    label_style: "Art Style",
-    label_pages: "Number of Pages",
-    cost_per_page: "$20 / page",
-    total_cost: "Estimated Cost",
-    order_btn: "Proceed to Contract",
-    payment_btn: "Agree & Pay",
-    contract_title: "Production Agreement & Rights",
-    contract_agree: "I agree to the terms and conditions above.",
-    studio_step_1: "Quote", studio_step_2: "Contract", studio_step_3: "Done",
-    order_complete_title: "Thank you for your order!",
-    order_complete_msg: "Payment received. Production will start soon.\n\nOur editor will contact you via email for further details.\n(Estimated delivery: 2 weeks for 20 pages)",
-    back_to_home: "Back to Home",
-    // Marketing & PWA
-    install_app: "Install App",
-    install_desc: "Add to home screen for notifications!",
-    seo_desc: "MangaX is the cross-border platform for indie manga."
+    label_style: "Art Style", label_pages: "Number of Pages", cost_per_page: "$20 / page", total_cost: "Estimated Cost",
+    order_btn: "Proceed to Contract", payment_btn: "Agree & Pay", contract_title: "Production Agreement & Rights",
+    contract_agree: "I agree to the terms and conditions above.", studio_step_1: "Quote", studio_step_2: "Contract", studio_step_3: "Done",
+    order_complete_title: "Thank you for your order!", order_complete_msg: "Payment received. Production will start soon.\n\nOur editor will contact you via email for further details.\n(Estimated delivery: 2 weeks for 20 pages)", back_to_home: "Back to Home",
+    install_app: "Install App", install_desc: "Add to home screen for notifications!", seo_desc: "MangaX is the cross-border platform for indie manga.",
+    config_error: "Config Error", config_error_msg: "Please set FIREBASE_CONFIG in the code.",
+    monthly_views: "Monthly Views",
+    total_revenue: "Total Revenue",
+    global_readers: "Global Readers",
+    become_sponsor: "Become a sponsor",
+    latest_ep: "Latest",
+    future_ep: "Upcoming"
   }
 };
 
@@ -183,176 +173,97 @@ const compressImage = (file) => {
 
 const translateImageWithGemini = async (base64Image, targetLang, isPremium) => {
     if (!isPremium) throw new Error("PREMIUM_REQUIRED");
-    await new Promise(r => setTimeout(r, 2000));
-    return [
-        { original: "なんてことだ...", translated: "Oh my god..." },
-        { original: "まさか彼が？", translated: "Is it really him?" },
-        { original: "逃げろ！", translated: "Run away!" },
-        { original: "（爆発音）", translated: "(Explosion sound)" }
-    ];
+    if (!GEMINI_API_KEY) return [{ original: "APIキーなし", translated: "API Key Missing" }];
+    try {
+        const inlineDataPart = base64Image.split(',')[1];
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [
+                        { text: `Extract all text bubbles from this manga page. Return a JSON array where each object has "original" (Japanese text found) and "translated" (English translation). Only return the JSON array, no markdown.` },
+                        { inlineData: { mimeType: "image/jpeg", data: inlineDataPart } }
+                    ]
+                }],
+                generationConfig: { responseMimeType: "application/json" }
+            })
+        });
+        if (!response.ok) throw new Error('API Error');
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        return JSON.parse(text);
+    } catch (e) {
+        console.error(e);
+        throw e;
+    }
 };
 
-// --- SEO Component (Critical for Marketing) ---
+// --- SEO Component ---
 const SEO = ({ title, description, image, url, t }) => {
     const siteTitle = t('app_name');
     const fullTitle = title ? `${title} | ${siteTitle}` : siteTitle;
     const desc = description || t('seo_desc');
     const siteUrl = url || window.location.href;
-    const ogImage = image || "https://placehold.co/1200x630/black/white?text=MangaX+by+FOMUS"; // Default generic image
-
+    const ogImage = image || "https://placehold.co/1200x630/orange/white?text=MangaX+by+FOMUS"; 
     return (
         <Helmet>
             <title>{fullTitle}</title>
             <meta name="description" content={desc} />
-            
-            {/* OGP for Twitter/X, Facebook, LINE */}
             <meta property="og:type" content="website" />
             <meta property="og:title" content={fullTitle} />
             <meta property="og:description" content={desc} />
             <meta property="og:image" content={ogImage} />
             <meta property="og:url" content={siteUrl} />
             <meta property="og:site_name" content={siteTitle} />
-            
             <meta name="twitter:card" content="summary_large_image" />
-            <meta name="twitter:title" content={fullTitle} />
-            <meta name="twitter:description" content={desc} />
-            <meta name="twitter:image" content={ogImage} />
         </Helmet>
     );
 };
 
 // --- Components ---
-
-// PWA Install Prompt Component (Mock)
 const InstallPrompt = ({ t }) => {
     const [show, setShow] = useState(true);
     if (!show) return null;
     return (
         <div className="bg-gradient-to-r from-orange-500 to-red-600 text-white p-3 flex justify-between items-center px-4 sticky top-[54px] z-20 animate-fade-in-down shadow-md">
-            <div className="flex items-center gap-3">
-                <div className="bg-white p-1 rounded-md"><Smartphone size={20} className="text-orange-600"/></div>
-                <div>
-                    <div className="text-xs font-bold">{t('install_app')}</div>
-                    <div className="text-[10px] text-white/90">{t('install_desc')}</div>
-                </div>
-            </div>
-            <div className="flex items-center gap-3">
-                <button onClick={() => alert("Browser install prompt would trigger here.")} className="bg-white text-orange-600 text-xs font-bold px-3 py-1.5 rounded-full shadow-sm hover:bg-gray-100">GET</button>
-                <button onClick={() => setShow(false)}><X size={16} className="text-white/70 hover:text-white"/></button>
-            </div>
+            <div className="flex items-center gap-3"><div className="bg-white p-1 rounded-md"><Smartphone size={20} className="text-orange-600"/></div><div><div className="text-xs font-bold">{t('install_app')}</div><div className="text-[10px] text-white/90">{t('install_desc')}</div></div></div>
+            <div className="flex items-center gap-3"><button onClick={() => alert("Browser install prompt")} className="bg-white text-orange-600 text-xs font-bold px-3 py-1.5 rounded-full shadow-sm hover:bg-gray-100">GET</button><button onClick={() => setShow(false)}><X size={16} className="text-white/70 hover:text-white"/></button></div>
         </div>
     );
 };
 
-// Creator Dashboard
 const CreatorDashboard = ({ requests, seriesList, t }) => {
     const totalRevenue = requests.reduce((sum, req) => sum + (req.price || 0), 0);
     return (
         <div className="space-y-4 animate-fade-in">
-            <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-4 text-white shadow-lg">
-                    <div className="flex items-center gap-2 mb-1 opacity-80 text-xs font-bold uppercase"><DollarSign size={14}/> {t('total_revenue')}</div>
-                    <div className="text-2xl font-bold">${totalRevenue.toLocaleString()}</div>
-                </div>
-                <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl p-4 text-white shadow-lg">
-                    <div className="flex items-center gap-2 mb-1 opacity-80 text-xs font-bold uppercase"><Globe size={14}/> {t('global_readers')}</div>
-                    <div className="text-2xl font-bold">42%</div>
-                </div>
-            </div>
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="font-bold text-gray-700 mb-2">My Series Status</h3>
-                {seriesList.length === 0 ? <p className="text-xs text-gray-400">No series yet.</p> : 
-                    seriesList.map(s => (
-                        <div key={s.id} className="flex justify-between items-center py-2 border-b last:border-0">
-                            <span className="text-sm font-bold truncate">{s.title}</span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded ${s.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                {s.status === 'approved' ? t('status_approved') : t('status_pending')}
-                            </span>
-                        </div>
-                    ))
-                }
-            </div>
+            <div className="grid grid-cols-2 gap-3"><div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-4 text-white shadow-lg"><div className="flex items-center gap-2 mb-1 opacity-80 text-xs font-bold uppercase"><DollarSign size={14}/> {t('total_revenue')}</div><div className="text-2xl font-bold">${totalRevenue.toLocaleString()}</div><div className="text-[10px] opacity-80 mt-1">+ $200 (Pending)</div></div><div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl p-4 text-white shadow-lg"><div className="flex items-center gap-2 mb-1 opacity-80 text-xs font-bold uppercase"><Globe size={14}/> {t('global_readers')}</div><div className="text-2xl font-bold">42%</div><div className="text-[10px] opacity-80 mt-1">Top: USA, France</div></div></div>
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100"><div className="flex items-center justify-between mb-4"><h3 className="font-bold text-gray-700 flex items-center gap-2"><Trophy size={18} /> {t('monthly_views')}</h3><span className="text-xl font-bold text-gray-900">12,540</span></div><div className="h-32 flex items-end justify-between gap-1">{[40, 60, 45, 70, 90, 80, 100].map((h, i) => (<div key={i} className="w-full bg-blue-100 rounded-t-sm relative group"><div className="absolute bottom-0 w-full bg-blue-500 rounded-t-sm" style={{height: `${h}%`}}></div></div>))}</div></div>
         </div>
     );
 };
 
-// Manga X Studio View
 const MangaStudioView = ({ t }) => {
-    const [step, setStep] = useState(1);
-    const [script, setScript] = useState('');
-    const [style, setStyle] = useState('shonen');
-    const [pages, setPages] = useState(10);
-    const [loading, setLoading] = useState(false);
-    const [agreed, setAgreed] = useState(false);
-    const price = pages * 20; 
-    const handleToContract = () => { if(!script) return alert("Please enter a script."); setStep(2); };
-    const handlePayment = () => { if(!agreed) return alert("Please agree to the contract."); if(confirm(t('purchase_confirm'))) { setLoading(true); setTimeout(() => { setLoading(false); setStep(3); }, 2000); } };
-
+    const [step, setStep] = useState(1); const [script, setScript] = useState(''); const [style, setStyle] = useState('shonen'); const [pages, setPages] = useState(10); const [loading, setLoading] = useState(false); const [agreed, setAgreed] = useState(false); const price = pages * 20;
+    const handlePayment = () => { if(!agreed) return alert("Agree to contract."); if(confirm(t('purchase_confirm'))) { setLoading(true); setTimeout(() => { setLoading(false); setStep(3); }, 2000); } };
     return (
         <div className="bg-gray-50 min-h-screen pb-20 animate-fade-in">
-            <SEO title={t('studio_title')} description={t('studio_desc')} t={t}/>
-            <div className="bg-gray-900 text-white p-6 pb-12 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-48 h-48 bg-orange-500/20 rounded-full blur-3xl"></div>
-                <h2 className="text-2xl font-bold flex items-center gap-2 relative z-10"><Wand2 className="text-orange-400" /> {t('studio_title')}</h2>
-                <p className="text-sm text-gray-400 mt-2 relative z-10">{t('studio_subtitle')}</p>
-            </div>
+            <div className="bg-black text-white p-6 pb-12 relative overflow-hidden"><div className="absolute top-0 right-0 w-48 h-48 bg-orange-500/30 rounded-full blur-3xl"></div><h2 className="text-2xl font-bold flex items-center gap-2 relative z-10"><Wand2 className="text-orange-400" /> {t('studio_title')}</h2><p className="text-sm text-gray-400 mt-2 relative z-10">{t('studio_subtitle')}</p></div>
             <div className="px-4 -mt-6 relative z-10 space-y-4">
-                <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm mb-2 text-xs font-bold text-gray-400">
-                    <div className={`flex items-center gap-1 ${step >= 1 ? 'text-orange-600' : ''}`}><span className={`w-5 h-5 rounded-full flex items-center justify-center ${step >= 1 ? 'bg-orange-600 text-white' : 'bg-gray-200'}`}>1</span> {t('studio_step_1')}</div>
-                    <div className="h-0.5 w-8 bg-gray-200"></div>
-                    <div className={`flex items-center gap-1 ${step >= 2 ? 'text-orange-600' : ''}`}><span className={`w-5 h-5 rounded-full flex items-center justify-center ${step >= 2 ? 'bg-orange-600 text-white' : 'bg-gray-200'}`}>2</span> {t('studio_step_2')}</div>
-                    <div className="h-0.5 w-8 bg-gray-200"></div>
-                    <div className={`flex items-center gap-1 ${step >= 3 ? 'text-orange-600' : ''}`}><span className={`w-5 h-5 rounded-full flex items-center justify-center ${step >= 3 ? 'bg-orange-600 text-white' : 'bg-gray-200'}`}>3</span> {t('studio_step_3')}</div>
-                </div>
                 <div className="bg-white p-5 rounded-xl shadow-lg border border-gray-100">
-                    {step === 1 && (
-                        <div className="space-y-4 animate-slide-up">
-                            <p className="text-xs text-gray-500 mb-4 bg-orange-50 p-3 rounded leading-relaxed"><AlertCircle size={14} className="inline mr-1 mb-0.5 text-orange-500"/>{t('studio_desc')}</p>
-                            <div><label className="text-xs font-bold text-gray-700 block mb-2 flex items-center gap-1"><FileText size={14}/> {t('input_script')}</label><textarea className="w-full border p-3 rounded-lg text-sm h-32 focus:ring-2 focus:ring-orange-500 outline-none" placeholder={t('input_script_placeholder')} value={script} onChange={(e) => setScript(e.target.value)}/></div>
-                    <div className="flex gap-4"><div className="flex-1"><label className="text-xs font-bold text-gray-700 block mb-2 flex items-center gap-1"><Palette size={14}/> {t('label_style')}</label><select className="w-full border p-2 rounded-lg text-sm bg-white" value={style} onChange={e=>setStyle(e.target.value)}><option value="shonen">{t('style_shonen')}</option><option value="shojo">{t('style_shojo')}</option><option value="seinen">{t('style_seinen')}</option><option value="webtoon">{t('style_webtoon')}</option></select></div><div className="w-1/3"><label className="text-xs font-bold text-gray-700 block mb-2">{t('label_pages')}</label><input type="number" min="1" max="100" className="w-full border p-2 rounded-lg text-sm" value={pages} onChange={e=>setPages(Number(e.target.value))} /></div></div>
-                            <div className="border-t border-gray-100 pt-4 mt-2"><div className="flex justify-between items-center mb-4"><span className="text-xs text-gray-500">{t('cost_per_page')}</span><div className="text-right"><div className="text-xs text-gray-400">{t('total_cost')}</div><div className="text-2xl font-bold text-orange-600">${price}</div></div></div><button onClick={handleToContract} disabled={!script} className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-bold py-3 rounded-lg shadow-md hover:shadow-lg transition-all active:scale-95 flex justify-center items-center gap-2">{t('order_btn')} <ChevronRight size={18} /></button></div>
-                        </div>
-                    )}
-                    {step === 2 && (
-                        <div className="space-y-4 animate-slide-up">
-                            <h3 className="font-bold text-gray-800 flex items-center gap-2 border-b pb-2"><FileCheck size={18} className="text-green-500"/> {t('contract_title')}</h3>
-                            <div className="bg-gray-50 p-3 rounded-lg text-xs text-gray-600 h-48 overflow-y-auto border border-gray-200 leading-relaxed"><p className="mb-2"><strong>1. Rights</strong><br/>You retain all copyrights.</p><p className="mb-2"><strong>2. Delivery</strong><br/>~2 weeks for 20 pages.</p><p className="mb-2"><strong>3. Usage</strong><br/>Free to publish anywhere.</p></div>
-                            <div className="flex items-center gap-2 py-2"><input type="checkbox" id="agree" className="w-4 h-4 text-orange-600 rounded" checked={agreed} onChange={e => setAgreed(e.target.checked)} /><label htmlFor="agree" className="text-sm font-bold text-gray-800 cursor-pointer">{t('contract_agree')}</label></div>
-                            <div className="flex justify-between items-center pt-2 border-t mt-2"><div className="text-right w-full"><div className="text-xs text-gray-400">Total</div><div className="text-2xl font-bold text-gray-900 mb-4">${price}</div><button onClick={handlePayment} disabled={loading || !agreed} className={`w-full text-white font-bold py-3 rounded-lg shadow-md transition-all flex justify-center items-center gap-2 ${agreed ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-300 cursor-not-allowed'}`}>{loading ? <Loader className="animate-spin" /> : <DollarSign size={18} />}{t('payment_btn')}</button></div></div>
-                            <button onClick={() => setStep(1)} className="text-xs text-gray-400 w-full text-center mt-2 underline">{t('cancel')}</button>
-                        </div>
-                    )}
-                    {step === 3 && (
-                        <div className="text-center py-8 animate-slide-up">
-                            <div className="w-20 h-20 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce"><Check size={40} strokeWidth={3} /></div>
-                            <h3 className="text-xl font-bold text-gray-800 mb-2">{t('order_complete_title')}</h3>
-                            <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-wrap mb-8">{t('order_complete_msg')}</p>
-                            <div className="bg-gray-50 p-4 rounded-lg flex items-center gap-3 text-left mb-6 mx-4"><Mail size={24} className="text-blue-500"/><div><div className="text-xs text-gray-400">Confirmation sent to</div><div className="text-sm font-bold">user@example.com</div></div></div>
-                            <button onClick={() => setStep(1)} className="bg-gray-900 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:bg-gray-800 transition-colors">{t('back_to_home')}</button>
-                        </div>
-                    )}
+                    {step === 1 && (<div className="space-y-4 animate-slide-up"><p className="text-xs text-gray-500 mb-4 bg-orange-50 p-3 rounded leading-relaxed"><AlertCircle size={14} className="inline mr-1 mb-0.5 text-orange-500"/>{t('studio_desc')}</p><div><label className="text-xs font-bold text-gray-700 block mb-2 flex items-center gap-1"><FileText size={14}/> {t('input_script')}</label><textarea className="w-full border p-3 rounded-lg text-sm h-32 focus:ring-2 focus:ring-orange-500 outline-none" placeholder={t('input_script_placeholder')} value={script} onChange={(e) => setScript(e.target.value)}/></div><div className="flex gap-4"><div className="flex-1"><label className="text-xs font-bold text-gray-700 block mb-2 flex items-center gap-1"><Palette size={14}/> {t('label_style')}</label><select className="w-full border p-2 rounded-lg text-sm bg-white" value={style} onChange={e=>setStyle(e.target.value)}><option value="shonen">{t('style_shonen')}</option><option value="shojo">{t('style_shojo')}</option><option value="seinen">{t('style_seinen')}</option><option value="webtoon">{t('style_webtoon')}</option></select></div><div className="w-1/3"><label className="text-xs font-bold text-gray-700 block mb-2">{t('label_pages')}</label><input type="number" min="1" max="100" className="w-full border p-2 rounded-lg text-sm" value={pages} onChange={e=>setPages(Number(e.target.value))} /></div></div><div className="border-t border-gray-100 pt-4 mt-2"><div className="flex justify-between items-center mb-4"><span className="text-xs text-gray-500">{t('cost_per_page')}</span><div className="text-right"><div className="text-xs text-gray-400">{t('total_cost')}</div><div className="text-2xl font-bold text-orange-600">${price}</div></div></div><button onClick={() => script ? setStep(2) : alert("Please input script")} className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-bold py-3 rounded-lg shadow-md hover:shadow-lg transition-all active:scale-95 flex justify-center items-center gap-2">{t('order_btn')} <ChevronRight size={18} /></button></div></div>)}
+                    {step === 2 && (<div className="space-y-4 animate-slide-up"><h3 className="font-bold text-gray-800 flex items-center gap-2 border-b pb-2"><FileCheck size={18} className="text-green-500"/> {t('contract_title')}</h3><div className="bg-gray-50 p-3 rounded-lg text-xs text-gray-600 h-48 overflow-y-auto border border-gray-200 leading-relaxed"><p className="mb-2"><strong>1. Rights</strong><br/>You retain all copyrights.</p><p className="mb-2"><strong>2. Delivery</strong><br/>~2 weeks for 20 pages.</p></div><div className="flex items-center gap-2 py-2"><input type="checkbox" id="agree" className="w-4 h-4 text-orange-600 rounded" checked={agreed} onChange={e => setAgreed(e.target.checked)} /><label htmlFor="agree" className="text-sm font-bold text-gray-800 cursor-pointer">{t('contract_agree')}</label></div><div className="flex justify-between items-center pt-2 border-t mt-2"><div className="text-right w-full"><div className="text-xs text-gray-400">Total</div><div className="text-2xl font-bold text-gray-900 mb-4">${price}</div><button onClick={handlePayment} disabled={loading || !agreed} className={`w-full text-white font-bold py-3 rounded-lg shadow-md flex justify-center items-center gap-2 ${agreed ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-300 cursor-not-allowed'}`}>{loading ? <Loader className="animate-spin" /> : <DollarSign size={18} />}{t('payment_btn')}</button></div></div><button onClick={() => setStep(1)} className="text-xs text-gray-400 w-full text-center mt-2 underline">{t('cancel')}</button></div>)}
+                    {step === 3 && (<div className="text-center py-8 animate-slide-up"><div className="w-20 h-20 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce"><Check size={40} strokeWidth={3} /></div><h3 className="text-xl font-bold text-gray-800 mb-2">{t('order_complete_title')}</h3><p className="text-sm text-gray-500 leading-relaxed whitespace-pre-wrap mb-8">{t('order_complete_msg')}</p><button onClick={() => setStep(1)} className="bg-gray-900 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:bg-gray-800 transition-colors">{t('back_to_home')}</button></div>)}
                 </div>
             </div>
         </div>
     );
 };
 
-// Platform Sponsor View
 const PlatformSponsorView = ({ onBack, t }) => {
     const handleApply = (tier) => { if(confirm(`${tier}: ${t('purchase_confirm')}`)) alert(t('purchase_complete')); };
     return (
-        <div className="bg-gray-50 min-h-screen pb-24 animate-fade-in">
-            <SEO title={t('platform_sponsor_title')} description={t('platform_vision')} t={t}/>
-            <div className="bg-gray-900 text-white p-8 pt-12 pb-16 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/20 rounded-full blur-3xl transform translate-x-10 -translate-y-10"></div>
-                <div className="relative z-10 text-center"><h2 className="text-2xl font-bold mb-2 flex items-center justify-center gap-2"><Handshake className="text-orange-400" /> Official Partners</h2><p className="text-orange-200 text-sm font-bold mb-4">Support the Creators.</p></div>
-            </div>
-            <div className="px-4 -mt-8 relative z-20 space-y-4">
-                <div className="bg-white rounded-xl shadow-xl overflow-hidden border-2 border-slate-200 transform hover:scale-[1.02] transition-transform"><div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 flex justify-between items-center"><div className="flex items-center gap-2 font-bold text-lg"><Crown className="text-slate-300" fill="currentColor" /> Platinum</div></div><div className="p-6 text-center"><div className="text-3xl font-bold text-slate-800 mb-2">$10,000</div><button onClick={() => handleApply('Platinum')} className="w-full bg-slate-800 text-white font-bold py-3 rounded-lg shadow-md hover:bg-slate-700 transition-colors">{t('become_sponsor')}</button></div></div>
-                <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-yellow-100"><div className="bg-gradient-to-r from-yellow-400 to-orange-400 text-white p-3 flex justify-between items-center"><div className="flex items-center gap-2 font-bold"><Star className="text-white" fill="currentColor" /> Gold</div></div><div className="p-5 text-center"><div className="text-2xl font-bold text-gray-800 mb-1">$5,000</div><button onClick={() => handleApply('Gold')} className="w-full bg-yellow-500 text-white font-bold py-2 rounded-lg shadow hover:bg-yellow-600 transition-colors">{t('become_sponsor')}</button></div></div>
-            </div>
-            <div className="p-4"><button onClick={onBack} className="w-full bg-gray-200 py-3 rounded font-bold text-gray-600">{t('close')}</button></div>
-        </div>
+        <div className="bg-gray-50 min-h-screen pb-24 animate-fade-in"><div className="bg-gray-900 text-white p-8 pt-12 pb-16 relative overflow-hidden"><div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/20 rounded-full blur-3xl transform translate-x-10 -translate-y-10"></div><div className="relative z-10 text-center"><h2 className="text-2xl font-bold mb-2 flex items-center justify-center gap-2"><Handshake className="text-orange-400" /> Official Partners</h2><p className="text-orange-200 text-sm font-bold mb-4">Support the Creators.</p></div></div><div className="px-4 -mt-8 relative z-20 space-y-4"><div className="bg-white rounded-xl shadow-xl overflow-hidden border-2 border-slate-200"><div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-4 flex justify-between items-center"><div className="flex items-center gap-2 font-bold text-lg"><Crown className="text-slate-300" fill="currentColor" /> Platinum</div></div><div className="p-6 text-center"><div className="text-3xl font-bold text-slate-800 mb-2">$10,000</div><button onClick={() => handleApply('Platinum')} className="w-full bg-slate-800 text-white font-bold py-3 rounded-lg shadow-md">{t('become_sponsor')}</button></div></div><div className="bg-white rounded-xl shadow-lg overflow-hidden border border-yellow-100"><div className="bg-gradient-to-r from-yellow-400 to-orange-400 text-white p-3 flex justify-between items-center"><div className="flex items-center gap-2 font-bold"><Star className="text-white" fill="currentColor" /> Gold</div></div><div className="p-5 text-center"><div className="text-2xl font-bold text-gray-800 mb-1">$5,000</div><button onClick={() => handleApply('Gold')} className="w-full bg-yellow-500 text-white font-bold py-2 rounded-lg shadow">{t('become_sponsor')}</button></div></div></div><div className="p-4"><button onClick={onBack} className="w-full bg-gray-200 py-3 rounded font-bold text-gray-600">{t('close')}</button></div></div>
     );
 };
 
@@ -393,9 +304,9 @@ const SupportStoreView = ({ series, onBack, userId, chapters, t }) => {
     const [loading, setLoading] = useState(false); const [shopName, setShopName] = useState(''); const [shopLink, setShopLink] = useState(''); const [targetChapter, setTargetChapter] = useState(null); const [images, setImages] = useState([]); const [takenChapters, setTakenChapters] = useState([]);
     const latestChapterNum = chapters.length > 0 ? Math.max(...chapters.map(c => c.number)) : 0;
     const sponsorableRange = [0, 1, 2, 3, 4].map(i => latestChapterNum + i).filter(n => n > 0);
-    useEffect(() => { const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'requests'), where('seriesId', '==', series.id), where('type', '==', 'episode')); const unsub = onSnapshot(q, (snapshot) => { setTakenChapters(snapshot.docs.map(d => d.data().targetChapterNumber)); }); return unsub; }, [series.id]);
+    useEffect(() => { const q = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'requests'), where('seriesId', '==', series.id), where('type', '==', 'episode')); const unsub = onSnapshot(q, (snapshot) => { setTakenChapters(snapshot.docs.map(d => d.data().targetChapterNumber)); }); return unsub; }, [series.id]);
     const handleImageSelect = async (e) => { const files = Array.from(e.target.files); if (files.length === 0) return; setLoading(true); const processed = []; for (const file of files) { processed.push(await compressImage(file)); } setImages([...images, ...processed]); setLoading(false); };
-    const handlePurchase = async () => { if (!shopName || !shopLink || images.length < 1 || !targetChapter) return alert("Required"); if(!confirm(t('purchase_confirm'))) return; setLoading(true); try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'requests'), { type: 'episode', seriesId: series.id, seriesTitle: series.title, userId: userId, status: 'pending', createdAt: serverTimestamp(), price: 200, shopName, shopLink, targetChapterNumber: Number(targetChapter), images }); alert(t('purchase_complete')); onBack(); } catch (e) { alert("Error"); } finally { setLoading(false); } };
+    const handlePurchase = async () => { if (!shopName || !shopLink || images.length < 1 || !targetChapter) return alert("Required"); if(!confirm(t('purchase_confirm'))) return; setLoading(true); try { await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'requests'), { type: 'episode', seriesId: series.id, seriesTitle: series.title, userId: userId, status: 'pending', createdAt: serverTimestamp(), price: 200, shopName, shopLink, targetChapterNumber: Number(targetChapter), images }); alert(t('purchase_complete')); onBack(); } catch (e) { alert("Error"); } finally { setLoading(false); } };
     return (
         <div className="bg-gray-50 min-h-screen pb-20"><div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center sticky top-0 z-20"><button onClick={onBack}><ChevronLeft /></button><h2 className="font-bold text-gray-800 ml-2">{t('support_title')}</h2></div><div className="p-4 space-y-4"><div className="bg-white p-6 rounded-xl shadow-lg animate-fade-in-up border-2 border-yellow-400"><div className="flex justify-between items-center mb-4"><h3 className="font-bold flex items-center gap-2 text-lg text-gray-800"><Crown className="text-yellow-500"/> {t('plan_episode_title')}</h3><span className="font-bold text-xl text-red-500">{t('plan_episode_price_display')}</span></div><p className="text-sm text-gray-500 mb-6">{t('plan_episode_desc')}</p><div className="space-y-4"><div><label className="text-xs font-bold text-gray-500 block mb-2">{t('select_chapter')}</label><div className="grid grid-cols-1 gap-2">{sponsorableRange.length > 0 ? sponsorableRange.map(num => { const isTaken = takenChapters.includes(num); const isLatest = num === latestChapterNum; return (<button key={num} onClick={() => !isTaken && setTargetChapter(num)} disabled={isTaken} className={`flex items-center justify-between p-3 rounded border text-sm transition-colors ${targetChapter === num ? 'bg-yellow-50 border-yellow-500 text-yellow-800 ring-1 ring-yellow-500' : isTaken ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed' : 'bg-white border-gray-200 hover:bg-gray-50'}`}><div className="flex items-center gap-2"><span className="font-bold">#{num}</span>{isLatest && <span className="bg-red-100 text-red-600 text-[10px] px-1.5 py-0.5 rounded font-bold">{t('latest_ep')}</span>}{num > latestChapterNum && <span className="bg-blue-100 text-blue-600 text-[10px] px-1.5 py-0.5 rounded font-bold">{t('future_ep')}</span>}</div>{isTaken ? <span className="text-[10px] font-bold flex items-center gap-1"><Lock size={10}/> {t('sold_out')}</span> : <span className="text-[10px] font-bold text-yellow-600">{t('available')}</span>}</button>); }) : <div className="text-center text-gray-400 text-xs py-4">N/A</div>}</div></div>{targetChapter && (<div className="space-y-3 pt-4 border-t border-gray-100 animate-fade-in"><div><label className="text-xs font-bold text-gray-500 block mb-1">{t('input_shopname')}</label><input className="w-full border bg-gray-50 p-3 rounded" value={shopName} onChange={e => setShopName(e.target.value)} /></div><div><label className="text-xs font-bold text-gray-500 block mb-1">{t('input_url')}</label><input className="w-full border bg-gray-50 p-3 rounded" value={shopLink} onChange={e => setShopLink(e.target.value)} /></div><div><label className="text-xs font-bold text-gray-500 block mb-1">{t('input_images')}</label><div className="flex gap-2 mb-2">{images.map((img, i) => (<div key={i} className="w-full h-32 bg-gray-900 rounded overflow-hidden relative border border-gray-200"><img src={img} className="w-full h-full object-contain"/><button onClick={() => setImages([])} className="absolute top-2 right-2 bg-white/20 text-white p-1 rounded-full"><X size={16}/></button></div>))}{images.length === 0 && (<label className="w-full h-32 bg-gray-50 rounded border-2 border-dashed flex flex-col items-center justify-center text-gray-400 cursor-pointer hover:bg-gray-100"><Upload size={24} /><span className="text-xs mt-2">{t('upload_logo')}</span><input type="file" accept="image/*" className="hidden" onChange={handleImageSelect}/></label>)}</div></div><button onClick={handlePurchase} disabled={loading} className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-4 rounded-lg shadow-md mt-4 flex justify-center items-center gap-2 transform active:scale-95 transition-all">{loading ? <Loader className="animate-spin" /> : <DollarSign size={20} />} Sponsor Ep {targetChapter}</button></div>)}</div></div></div></div>
     );
@@ -406,15 +317,15 @@ const ReaderView = ({ chapter, series, onBack, t, isPremium, onOpenPremium }) =>
     const direction = series.direction === 'ltr' ? 'ltr' : 'rtl';
     useEffect(() => {
         if (chapter.usePageCollection) {
-            const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'pages'), where('chapterId', '==', chapter.id), orderBy('index'));
+            const q = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'pages'), where('chapterId', '==', chapter.id), orderBy('index'));
             onSnapshot(q, (snapshot) => { setPages(snapshot.docs.map(doc => doc.data().imageUrl)); setLoading(false); });
-            const qEp = query(collection(db, 'artifacts', appId, 'public', 'data', 'requests'), where('seriesId', '==', series.id), where('type', '==', 'episode'), where('targetChapterNumber', '==', chapter.number), orderBy('createdAt', 'desc'));
+            const qEp = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'requests'), where('seriesId', '==', series.id), where('type', '==', 'episode'), where('targetChapterNumber', '==', chapter.number), orderBy('createdAt', 'desc'));
             onSnapshot(qEp, (snap) => setEpisodeSponsor(!snap.empty ? snap.docs[0].data() : null));
             setReactions({ like: chapter.likes || 0, fire: chapter.fires || 0 });
         } else { setLoading(false); }
     }, [chapter, series.id]);
     const handleTranslate = async () => { if (!isPremium) { onOpenPremium(); return; } setTranslating(true); setShowTranslateSheet(true); try { const result = await translateImageWithGemini(pages[0], 'en', isPremium); setTranslationData(result); } catch (e) { alert(t('translation_error')); } finally { setTranslating(false); } };
-    const handleReaction = async (type) => { setReactions(prev => ({ ...prev, [type]: prev[type] + 1 })); const chapterRef = doc(db, 'artifacts', appId, 'public', 'data', 'chapters', chapter.id); const field = type === 'like' ? 'likes' : 'fires'; await updateDoc(chapterRef, { [field]: increment(1) }); const seriesRef = doc(db, 'artifacts', appId, 'public', 'data', 'series', series.id); await updateDoc(seriesRef, { totalLikes: increment(1) }); };
+    const handleReaction = async (type) => { setReactions(prev => ({ ...prev, [type]: prev[type] + 1 })); const chapterRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'chapters', chapter.id); const field = type === 'like' ? 'likes' : 'fires'; await updateDoc(chapterRef, { [field]: increment(1) }); const seriesRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'series', series.id); await updateDoc(seriesRef, { totalLikes: increment(1) }); };
     const handleShare = async () => { if (navigator.share) { try { await navigator.share({ title: series.title, text: `${series.title} #MangaX`, url: window.location.href }); } catch (error) { } } else { setShowShare(true); } };
     const hasSponsor = !!episodeSponsor;
     if(loading) return <div className="fixed inset-0 bg-black text-white flex items-center justify-center">Loading...</div>;
@@ -424,9 +335,9 @@ const ReaderView = ({ chapter, series, onBack, t, isPremium, onOpenPremium }) =>
             <div className={`absolute top-0 w-full p-4 bg-gradient-to-b from-black/80 to-transparent text-white flex justify-between z-50 transition-transform ${showUI?'':' -translate-y-full'}`}><button onClick={onBack} className="flex items-center gap-1 text-sm bg-white/10 hover:bg-white/20 p-2 rounded-full backdrop-blur-md transition-colors"><ChevronLeft size={20}/></button><span className="font-bold drop-shadow-md">#{chapter.number}</span></div>
             {showTranslateSheet && <div className="absolute bottom-20 left-4 right-4 z-[60] bg-black/90 border border-yellow-500/30 rounded-xl p-4 text-white max-h-[40vh] overflow-y-auto animate-slide-up"><div className="flex justify-between items-center mb-3 border-b border-white/10 pb-2"><div className="flex items-center gap-2 text-yellow-400 font-bold"><Sparkles size={16}/> {t('ai_translate')}</div><button onClick={()=>setShowTranslateSheet(false)}><X size={16}/></button></div>{translating ? <div className="py-4 text-center text-sm text-gray-400 flex flex-col items-center gap-2"><Loader className="animate-spin text-yellow-500"/>{t('translating')}</div> : <div className="space-y-3">{translationData && translationData.map((d,i)=>(<div key={i} className="bg-white/10 p-2 rounded text-sm"><div className="text-xs text-gray-400">{d.original}</div><div className="font-bold text-yellow-100">{d.translated}</div></div>))}</div>}</div>}
             <div ref={scrollContainerRef} dir={direction} className="flex-1 w-full h-full overflow-x-auto overflow-y-hidden snap-x snap-mandatory flex items-center scroll-smooth no-scrollbar" onClick={()=>setShowUI(!showUI)}>
-                {hasSponsor && <div className="w-full h-full flex-shrink-0 snap-center flex flex-col items-center justify-center bg-black relative text-white"><div className="text-xs tracking-[0.5em] text-gray-400 mb-8 uppercase">{t('presented_by')}</div><div className="w-64 h-64 bg-white/5 rounded-full flex items-center justify-center p-8 border border-white/10 shadow-[0_0_50px_rgba(255,255,255,0.1)] mb-8"><img src={episodeSponsor.images[0]} className="w-full h-full object-contain filter drop-shadow-lg" /></div><h2 className="text-xl font-bold tracking-widest">{episodeSponsor.shopName}</h2><div className="absolute bottom-10 text-[10px] text-gray-600">{t('sponsored_by_msg')}</div></div>}
+                {hasSponsor && <div className="w-full h-full flex-shrink-0 snap-center flex flex-col items-center justify-center bg-black relative text-white"><div className="text-xs tracking-[0.5em] text-gray-400 mb-8 uppercase">{t('presented_by')}</div><div className="w-64 h-64 bg-white/5 rounded-full flex itemscenter justify-center p-8 border border-white/10 shadow-[0_0_50px_rgba(255,255,255,0.1)] mb-8"><img src={episodeSponsor.images[0]} className="w-full h-full object-contain filter drop-shadow-lg" /></div><h2 className="text-xl font-bold tracking-widest">{episodeSponsor.shopName}</h2><div className="absolute bottom-10 text-[10px] text-gray-600">{t('sponsored_by_msg')}</div></div>}
                 {pages.map((url, i) => <div key={i} className="w-full h-full flex-shrink-0 snap-center flex items-center justify-center relative bg-black"><img src={url} className="max-h-full max-w-full object-contain shadow-2xl"/></div>)}
-                {hasSponsor && <div className="w-full h-full flex-shrink-0 snap-center flex flex-col items-center justify-center bg-[#111] relative text-white"><div className="text-2xl font-bold mb-2">{t('special_thanks')}</div><p className="text-sm text-gray-400 mb-8">{t('sponsor_desc')}</p><div className="bg-white text-black p-6 rounded-xl w-[80%] max-w-sm shadow-2xl"><div className="w-full h-32 mb-4 flex items-center justify-center bg-gray-50 rounded"><img src={episodeSponsor.images[0]} className="max-h-full max-w-full object-contain" /></div><h3 className="font-bold text-lg mb-1">{episodeSponsor.shopName}</h3><a href={episodeSponsor.shopLink} target="_blank" rel="noreferrer" className="block w-full bg-blue-600 text-white font-bold py-3 rounded text-center text-sm hover:bg-blue-700">{t('official_site')} <ExternalLink size={12} className="inline ml-1"/></a></div></div>}
+                {hasSponsor && <div className="w-full h-full flex-shrink-0 snap-center flex flex-col items-center justify-center bg-zinc-900 relative text-white"><div className="text-2xl font-bold mb-2">{t('special_thanks')}</div><p className="text-sm text-gray-400 mb-8">{t('sponsor_desc')}</p><div className="bg-white text-black p-6 rounded-xl w-[80%] max-w-sm shadow-2xl"><div className="w-full h-32 mb-4 flex items-center justify-center bg-gray-50 rounded"><img src={episodeSponsor.images[0]} className="max-h-full max-w-full object-contain" /></div><h3 className="font-bold text-lg mb-1">{episodeSponsor.shopName}</h3><a href={episodeSponsor.shopLink} target="_blank" rel="noreferrer" className="block w-full bg-blue-600 text-white font-bold py-3 rounded text-center text-sm hover:bg-blue-700">{t('official_site')} <ExternalLink size={12} className="inline ml-1"/></a></div></div>}
                 <div className="w-full h-full flex-shrink-0 snap-center flex items-center justify-center bg-[#111] text-white p-4"><div className="w-full max-w-sm flex flex-col items-center"><div className="flex gap-6 mb-8"><button onClick={(e) => { e.stopPropagation(); handleReaction('like'); }} className="flex flex-col items-center gap-1 group"><div className="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center text-pink-500 shadow-lg group-hover:bg-pink-200"><Heart size={32} fill="currentColor" /></div><span className="text-pink-400 font-bold text-sm">{reactions.like}</span></button><button onClick={(e) => { e.stopPropagation(); handleReaction('fire'); }} className="flex flex-col items-center gap-1 group"><div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center text-orange-500 shadow-lg group-hover:bg-orange-200"><Flame size={32} fill="currentColor" /></div><span className="text-orange-400 font-bold text-sm">{reactions.fire}</span></button></div><button onClick={handleShare} className="bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold py-3 px-8 rounded-full w-full transition-all flex items-center justify-center gap-2 mb-3"><Share2 size={18} /> {t('share_msg')}</button><button onClick={onBack} className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-8 rounded-full w-full">{t('back_to_detail')}</button></div></div>
             </div>
             <div className={`absolute bottom-0 w-full z-50 transition-transform ${showUI?'':' translate-y-full'}`}><div className="absolute bottom-20 right-4 flex flex-col gap-3"><button onClick={handleTranslate} className={`p-3 rounded-full shadow-lg flex items-center gap-2 backdrop-blur-md border ${isPremium ? 'bg-black/50 text-yellow-400 border-yellow-500/50' : 'bg-gray-800/80 text-gray-400 border-gray-600'}`}>{isPremium ? <Languages size={24} /> : <Lock size={20} />}</button><button onClick={(e) => { e.stopPropagation(); handleReaction('like'); }} className="bg-black/50 backdrop-blur-md p-3 rounded-full text-pink-500 border border-white/10 active:scale-90 transition-transform"><Heart size={24} fill="currentColor" /></button></div><div className="bg-gradient-to-t from-black/90 to-transparent p-4 pb-8 text-white flex justify-between"><button className="text-gray-400 text-sm flex items-center gap-1"> {direction === 'rtl' ? <><ChevronRight size={16}/> {t('next_chapter')}</> : <><ChevronLeft size={16}/> {t('prev_chapter')}</>}</button><button className="text-gray-400 text-sm flex items-center gap-1">{direction === 'rtl' ? <>{t('prev_chapter')} <ChevronLeft size={16}/></> : <>{t('next_chapter')} <ChevronRight size={16}/></>}</button></div></div>
@@ -463,17 +374,17 @@ const AdminView = ({ onBack, userId, t }) => {
 
     useEffect(() => {
         if (!userId) return;
-        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'series'), orderBy('updatedAt', 'desc')); 
+        const q = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'series'), orderBy('updatedAt', 'desc')); 
         onSnapshot(q, (snapshot) => { const all = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); setSeriesList(all.filter(s => s.createdBy === userId)); });
-        const qReq = query(collection(db, 'artifacts', appId, 'public', 'data', 'requests'), orderBy('createdAt', 'desc'));
+        const qReq = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'requests'), orderBy('createdAt', 'desc'));
         onSnapshot(qReq, (snap) => setRequests(snap.docs.map(d => ({id: d.id, ...d.data()}))));
     }, [userId]);
 
     const handleImageSelect = async (e) => { const files = Array.from(e.target.files); const processed=[]; for(const f of files) processed.push(await compressImage(f)); setSelectedImages(processed); };
     const removeImage = (index) => { const newImages = [...selectedImages]; newImages.splice(index, 1); setSelectedImages(newImages); };
-    const handleCreateSeries = async () => { if (!title) return; await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'series'), { title, author, coverUrl, description: desc, updatedAt: serverTimestamp(), createdBy: userId, isNew: true, totalLikes: 0, status: 'pending', direction: readingDir, language: language }); alert(t('apply_msg')); setMode('list'); setTitle(''); setAuthor(''); setCoverUrl(''); setDesc(''); };
-    const handleAddChapter = async () => { if (!selectedImages.length) return; const chapterRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chapters'), { seriesId: selectedSeriesId, number: Number(chapNumber), publishedAt: serverTimestamp(), title: `Ep ${chapNumber}`, usePageCollection: true, thumbnailUrl: selectedImages[0], authorNote: authorNote, likes: 0, fires: 0 }); const batch = writeBatch(db); selectedImages.forEach((imgData, index) => { const pageRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'pages')); batch.set(pageRef, { chapterId: chapterRef.id, index: index, imageUrl: imgData }); }); await batch.commit(); setMode('list'); setChapNumber(''); setSelectedImages([]); setAuthorNote(''); };
-    const demoApprove = async (id) => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'series', id), { status: 'approved' }); };
+    const handleCreateSeries = async () => { if (!title) return; await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'series'), { title, author, coverUrl, description: desc, updatedAt: serverTimestamp(), createdBy: userId, isNew: true, totalLikes: 0, status: 'pending', direction: readingDir, language: language }); alert(t('apply_msg')); setMode('list'); setTitle(''); setAuthor(''); setCoverUrl(''); setDesc(''); };
+    const handleAddChapter = async () => { if (!selectedImages.length) return; const chapterRef = await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'chapters'), { seriesId: selectedSeriesId, number: Number(chapNumber), publishedAt: serverTimestamp(), title: `Ep ${chapNumber}`, usePageCollection: true, thumbnailUrl: selectedImages[0], authorNote: authorNote, likes: 0, fires: 0 }); const batch = writeBatch(db); selectedImages.forEach((imgData, index) => { const pageRef = doc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'pages')); batch.set(pageRef, { chapterId: chapterRef.id, index: index, imageUrl: imgData }); }); await batch.commit(); setMode('list'); setChapNumber(''); setSelectedImages([]); setAuthorNote(''); };
+    const demoApprove = async (id) => { await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'series', id), { status: 'approved' }); };
 
     return (
         <div className="min-h-screen bg-gray-50 pb-20">
@@ -523,8 +434,7 @@ const AdminView = ({ onBack, userId, t }) => {
 };
 
 export default function App() {
-  const [user, setUser] = useState({ uid: 'guest' });
-  const [authReady, setAuthReady] = useState(false);
+  const [user, setUser] = useState(null);
   const [isPremium, setIsPremium] = useState(false);
   const [view, setView] = useState('home');
   const [showPremiumModal, setShowPremiumModal] = useState(false);
@@ -539,20 +449,30 @@ export default function App() {
   const t = (key) => RESOURCES[lang][key] || key;
   const toggleLang = () => setLang(prev => prev === 'ja' ? 'en' : 'ja');
 
-  useEffect(() => { const initAuth = async () => { if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) { await signInWithCustomToken(auth, __initial_auth_token); } else { await signInAnonymously(auth); } }; initAuth(); const unsubscribe = onAuthStateChanged(auth, async (u) => { setUser(u || { uid: 'guest' }); setAuthReady(true); if (u) { setHistory(getRecentHistory(u.uid)); const userRef = doc(db, 'artifacts', appId, 'users', u.uid, 'profile', 'status'); const docSnap = await getDoc(userRef); if (docSnap.exists() && docSnap.data().isPremium) { setIsPremium(true); } } else { setHistory([]); setIsPremium(false); } }); return () => unsubscribe(); }, []);
-  const handleSubscribe = async () => { if (!authReady || !user?.uid) { alert("Please wait for sign-in."); return; } const userRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'status'); await setDoc(userRef, { isPremium: true }, { merge: true }); setIsPremium(true); setShowPremiumModal(false); alert("Premium activated."); };
-  useEffect(() => { if (!authReady) return; const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'series'), orderBy('updatedAt', 'desc')); onSnapshot(q, (snap) => setSeriesData(snap.docs.map(d => ({ id: d.id, ...d.data() })))); }, [authReady]);
-  useEffect(() => { if (!authReady || !selectedSeries) return; const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'chapters')); onSnapshot(q, (snap) => setChaptersData(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.seriesId === selectedSeries.id))); }, [authReady, selectedSeries]);
+  useEffect(() => { 
+      if (!isConfigured) {
+          console.error(RESOURCES.ja.config_error_msg);
+          return;
+      }
+      const initAuth = async () => { if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) { await signInWithCustomToken(auth, __initial_auth_token); } else { await signInAnonymously(auth); } }; initAuth(); const unsubscribe = onAuthStateChanged(auth, async (u) => { setUser(u); if (u) { setHistory(getRecentHistory(u.uid)); const userRef = doc(db, 'artifacts', APP_ID, 'users', u.uid, 'profile', 'status'); const docSnap = await getDoc(userRef); if (docSnap.exists() && docSnap.data().isPremium) { setIsPremium(true); } } }); return () => unsubscribe(); 
+  }, []);
+  
+  const handleSubscribe = async () => { if (!user) return; const userRef = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'profile', 'status'); await setDoc(userRef, { isPremium: true }, { merge: true }); setIsPremium(true); setShowPremiumModal(false); alert("Premium activated."); };
+  useEffect(() => { if (!user) return; const q = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'series'), orderBy('updatedAt', 'desc')); onSnapshot(q, (snap) => setSeriesData(snap.docs.map(d => ({ id: d.id, ...d.data() })))); }, [user]);
+  useEffect(() => { if (!user || !selectedSeries) return; const q = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'chapters')); onSnapshot(q, (snap) => setChaptersData(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.seriesId === selectedSeries.id))); }, [user, selectedSeries]);
   const goDetail = (series) => { setSelectedSeries(series); setView('detail'); };
-  const goReader = (chapter) => { const uid = user?.uid || 'guest'; saveHistory(uid, selectedSeries.id, chapter.id, chapter.number, selectedSeries.title); setHistory(getRecentHistory(uid)); setSelectedChapter(chapter); setView('reader'); };
+  const goReader = (chapter) => { saveHistory(user.uid, selectedSeries.id, chapter.id, chapter.number, selectedSeries.title); setHistory(getRecentHistory(user.uid)); setSelectedChapter(chapter); setView('reader'); };
   const publicSeries = seriesData.filter(s => s.status === 'approved');
   const rankingData = [...publicSeries].sort((a, b) => (b.totalLikes || 0) - (a.totalLikes || 0)); 
   const displayData = homeTab === 'ranking' ? rankingData : publicSeries;
+  
+  if (!isConfigured) return <div className="flex h-screen items-center justify-center text-red-600 font-bold p-4 text-center">設定未完了<br/><span className="text-xs font-normal text-gray-600">コード内の FIREBASE_CONFIG にキーを設定してください</span></div>;
+  if (!user) return <div className="flex h-screen items-center justify-center text-orange-600 font-bold animate-pulse">Loading...</div>;
 
   return (
     <div className="bg-white min-h-screen text-gray-900 font-sans max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-gray-100">
       <PremiumModal isOpen={showPremiumModal} onClose={()=>setShowPremiumModal(false)} onSubscribe={handleSubscribe} t={t} />
-      {view === 'admin' ? ( <AdminView onBack={() => setView('home')} userId={user?.uid || 'guest'} t={t} /> ) : view === 'reader' && selectedChapter ? ( <ReaderView chapter={selectedChapter} series={selectedSeries} onBack={() => setView('detail')} t={t} isPremium={isPremium} onOpenPremium={() => setShowPremiumModal(true)} /> ) : view === 'store' && selectedSeries ? ( <SupportStoreView series={selectedSeries} onBack={() => setView('detail')} userId={user?.uid || 'guest'} chapters={chaptersData} t={t} /> ) : view === 'partners' ? ( <PlatformSponsorView onBack={() => setView('home')} t={t} /> ) : view === 'detail' && selectedSeries ? ( <DetailView series={selectedSeries} chapters={chaptersData} onBack={() => setView('home')} onRead={goReader} history={history} onOpenStore={()=>setView('store')} t={t} /> ) : (
+      {view === 'admin' ? ( <AdminView onBack={() => setView('home')} userId={user.uid} t={t} /> ) : view === 'reader' && selectedChapter ? ( <ReaderView chapter={selectedChapter} series={selectedSeries} onBack={() => setView('detail')} t={t} isPremium={isPremium} onOpenPremium={() => setShowPremiumModal(true)} /> ) : view === 'store' && selectedSeries ? ( <SupportStoreView series={selectedSeries} onBack={() => setView('detail')} userId={user.uid} chapters={chaptersData} t={t} /> ) : view === 'partners' ? ( <PlatformSponsorView onBack={() => setView('home')} t={t} /> ) : view === 'detail' && selectedSeries ? ( <DetailView series={selectedSeries} chapters={chaptersData} onBack={() => setView('home')} onRead={goReader} history={history} onOpenStore={()=>setView('store')} t={t} /> ) : (
         <div className="pb-20">
             <header className="bg-white text-gray-900 px-4 py-3 flex justify-between items-center sticky top-0 z-30 border-b border-gray-100/80 backdrop-blur-md bg-white/90">
                 <div className="flex items-center gap-2"><div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${isPremium ? 'bg-yellow-500 text-black' : 'bg-gray-200 text-gray-500'}`}>{isPremium ? <Crown size={16} /> : <User size={16} />}</div><div><div className="text-[10px] text-gray-400">{isPremium ? t('subscribed') : t('guest_label')}</div><div className="text-xs font-bold">{t('guest_name')}</div></div></div>

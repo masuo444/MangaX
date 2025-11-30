@@ -71,25 +71,64 @@ import {
 import { Helmet, HelmetProvider } from 'react-helmet-async';
 
 // ==========================================
-// 🌍 環境変数設定エリア (Vercel対応)
+// 🌍 設定エリア (トリプルハイブリッド対応)
 // ==========================================
-const env = import.meta.env || process.env;
 
-const FIREBASE_CONFIG = {
-  apiKey: env.REACT_APP_FIREBASE_API_KEY || env.VITE_FIREBASE_API_KEY,
-  authDomain: env.REACT_APP_FIREBASE_AUTH_DOMAIN || env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: env.REACT_APP_FIREBASE_PROJECT_ID || env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: env.REACT_APP_FIREBASE_STORAGE_BUCKET || env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: env.REACT_APP_FIREBASE_APP_ID || env.VITE_FIREBASE_APP_ID,
+const getFirebaseConfig = () => {
+  try {
+    // 1. 環境変数 (CRA/Vite どちらでも拾えるように両方見る)
+    if (typeof process !== 'undefined' && process.env && process.env.REACT_APP_FIREBASE_API_KEY) {
+      return {
+        apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+        authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+        projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+        storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+        appId: process.env.REACT_APP_FIREBASE_APP_ID,
+      };
+    }
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_FIREBASE_API_KEY) {
+      return {
+        apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+        authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+        projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+        storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+        appId: import.meta.env.VITE_FIREBASE_APP_ID,
+      };
+    }
+    // 2. プレビュー/コード埋め込み
+    if (typeof __firebase_config !== 'undefined') {
+      return JSON.parse(__firebase_config);
+    }
+  } catch (e) {}
+
+  // 3. 手動設定 (未設定時はデモモード)
+  return {
+    apiKey: '★ここにAPI Keyを貼り付け★',
+    authDomain: '★ここにAuth Domainを貼り付け★',
+    projectId: '★ここにProject IDを貼り付け★',
+    storageBucket: '★ここにStorage Bucketを貼り付け★',
+    messagingSenderId: '★ここにSender IDを貼り付け★',
+    appId: '★ここにApp IDを貼り付け★',
+  };
 };
 
-// Gemini / Stripe
-const GEMINI_API_KEY = env.REACT_APP_GEMINI_API_KEY || env.VITE_GEMINI_API_KEY;
-const STRIPE_KEY = env.REACT_APP_STRIPE_PUBLIC_KEY || env.VITE_STRIPE_PUBLIC_KEY;
+const getGeminiKey = () => {
+  try {
+    if (typeof process !== 'undefined' && process.env && process.env.REACT_APP_GEMINI_API_KEY) {
+      return process.env.REACT_APP_GEMINI_API_KEY;
+    }
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) {
+      return import.meta.env.VITE_GEMINI_API_KEY;
+    }
+  } catch (e) {}
+  return '';
+};
 
-// App ID
-const APP_ID = 'mangax-prod-v1';
+const FIREBASE_CONFIG = getFirebaseConfig();
+const GEMINI_API_KEY = getGeminiKey();
+const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'mangax-prod-v1';
 
 // --- Initialization Logic ---
 let app;
@@ -97,15 +136,63 @@ let auth;
 let db;
 let isConfigured = false;
 try {
-  if (FIREBASE_CONFIG.apiKey) {
+  if (FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.includes('★')) {
     app = initializeApp(FIREBASE_CONFIG);
     auth = getAuth(app);
     db = getFirestore(app);
     isConfigured = true;
+  } else {
+    console.warn('⚠️ Firebase keys not found. Running in DEMO MODE (Mock Data).');
   }
 } catch (e) {
   console.error('Firebase init error:', e);
 }
+
+// --- Mock Data for Demo Mode ---
+const MOCK_SERIES = [
+  {
+    id: '1',
+    title: 'Dragon Soul',
+    author: 'Akira T.',
+    coverUrl: 'https://placehold.co/300x400/orange/white?text=Dragon',
+    description: 'A legendary warrior returns.',
+    totalLikes: 1200,
+    status: 'approved',
+    updatedAt: new Date(),
+    direction: 'rtl',
+    language: 'ja',
+  },
+  {
+    id: '2',
+    title: 'Cyber City 2099',
+    author: 'Neon K.',
+    coverUrl: 'https://placehold.co/300x400/blue/white?text=Cyber',
+    description: 'Future noir detective story.',
+    totalLikes: 850,
+    status: 'approved',
+    updatedAt: new Date(),
+    direction: 'ltr',
+    language: 'en',
+  },
+  {
+    id: '3',
+    title: 'Silent Forest',
+    author: 'Green W.',
+    coverUrl: 'https://placehold.co/300x400/green/white?text=Forest',
+    description: 'Horror mystery in the woods.',
+    totalLikes: 430,
+    status: 'approved',
+    updatedAt: new Date(),
+    direction: 'rtl',
+    language: 'ja',
+    isNew: true,
+  },
+];
+const MOCK_CHAPTERS = [
+  { id: 'c1', seriesId: '1', number: 1, title: 'The Beginning', publishDate: '2025/11/01', likes: 50 },
+  { id: 'c2', seriesId: '1', number: 2, title: 'Awakening', publishDate: '2025/11/08', likes: 35 },
+  { id: 'c3', seriesId: '2', number: 1, title: 'Neon Lights', publishDate: '2025/11/05', likes: 40 },
+];
 
 // --- Translation Resources ---
 const RESOURCES = {
@@ -226,14 +313,9 @@ const RESOURCES = {
     install_app: 'アプリをインストール',
     install_desc: 'ホーム画面に追加して、最新話を通知で受け取ろう！',
     seo_desc: 'MangaXは、世界中のインディーズ漫画が集まるクロスボーダープラットフォームです。',
-    config_error: '設定未完了',
-    config_error_msg: 'VercelのEnvironment VariablesにFirebase設定を追加してください。',
-    monthly_views: '月間ビュー',
-    total_revenue: '総収益',
-    global_readers: '海外読者',
-    become_sponsor: 'スポンサーになる',
-    latest_ep: '最新話',
-    future_ep: '先行予約',
+    config_error: "設定未完了",
+    config_error_msg: "コード内の 'FIREBASE_CONFIG' にFirebaseのキーを設定してください。",
+    demo_mode: 'デモモード (データ保存なし)',
   },
   en: {
     app_name: 'MangaX by FOMUS',
@@ -256,7 +338,7 @@ const RESOURCES = {
     sponsored_by_msg: 'This content is brought to you by our sponsors',
     special_thanks: 'Special Thanks',
     sponsor_desc: 'Sponsors who supported this story',
-    official_site: "Visit Website",
+    official_site: 'Visit Website',
     author_note: "Author's Note",
     finished_reading: 'Finished Reading',
     back_to_detail: 'Back to Details',
@@ -353,27 +435,28 @@ const RESOURCES = {
     install_desc: 'Add to home screen for notifications!',
     seo_desc: 'MangaX is the cross-border platform for indie manga.',
     config_error: 'Config Error',
-    config_error_msg: 'Please set REACT_APP_FIREBASE_API_KEY in Vercel.',
-    monthly_views: 'Monthly Views',
-    total_revenue: 'Total Revenue',
-    global_readers: 'Global Readers',
-    become_sponsor: 'Become a sponsor',
-    latest_ep: 'Latest',
-    future_ep: 'Upcoming',
+    config_error_msg: 'Please set FIREBASE_CONFIG in the code.',
+    demo_mode: 'Demo Mode (No Save)',
   },
 };
 
 // --- Helper Functions ---
 const saveHistory = (userId, seriesId, chapterId, chapterNumber, seriesTitle) => {
-  const historyKey = `manga_history_${userId}`;
-  const history = JSON.parse(localStorage.getItem(historyKey) || '{}');
-  history[seriesId] = { seriesId, seriesTitle, chapterId, chapterNumber, lastReadAt: new Date().toISOString() };
-  localStorage.setItem(historyKey, JSON.stringify(history));
+  try {
+    const historyKey = `manga_history_${userId}`;
+    const history = JSON.parse(localStorage.getItem(historyKey) || '{}');
+    history[seriesId] = { seriesId, seriesTitle, chapterId, chapterNumber, lastReadAt: new Date().toISOString() };
+    localStorage.setItem(historyKey, JSON.stringify(history));
+  } catch (e) {}
 };
 const getRecentHistory = (userId) => {
-  const historyKey = `manga_history_${userId}`;
-  const history = JSON.parse(localStorage.getItem(historyKey) || '{}');
-  return Object.values(history).sort((a, b) => new Date(b.lastReadAt) - new Date(a.lastReadAt));
+  try {
+    const historyKey = `manga_history_${userId}`;
+    const history = JSON.parse(localStorage.getItem(historyKey) || '{}');
+    return Object.values(history).sort((a, b) => new Date(b.lastReadAt) - new Date(a.lastReadAt));
+  } catch (e) {
+    return [];
+  }
 };
 const compressImage = (file) =>
   new Promise((resolve) => {
@@ -399,15 +482,13 @@ const compressImage = (file) =>
 
 const translateImageWithGemini = async (base64Image, targetLang, isPremium) => {
   if (!isPremium) throw new Error('PREMIUM_REQUIRED');
-
   if (!GEMINI_API_KEY) {
     await new Promise((r) => setTimeout(r, 1000));
     return [
       { original: 'APIキー未設定', translated: 'API Key Missing' },
-      { original: 'Vercelで設定してください', translated: 'Set REACT_APP_GEMINI_API_KEY in Vercel' },
+      { original: 'コードを確認してください', translated: 'Please check the code' },
     ];
   }
-
   try {
     const inlineDataPart = base64Image.split(',')[1];
     const response = await fetch(
@@ -419,10 +500,7 @@ const translateImageWithGemini = async (base64Image, targetLang, isPremium) => {
           contents: [
             {
               parts: [
-                {
-                  text:
-                    'Extract all text bubbles from this manga page. Return a JSON array where each object has "original" (Japanese text found) and "translated" (English translation). Only return the JSON array, no markdown.',
-                },
+                { text: 'Extract text.' },
                 { inlineData: { mimeType: 'image/jpeg', data: inlineDataPart } },
               ],
             },
@@ -433,41 +511,25 @@ const translateImageWithGemini = async (base64Image, targetLang, isPremium) => {
     );
     if (!response.ok) throw new Error('API Error');
     const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    return JSON.parse(text);
+    return JSON.parse(data.candidates?.[0]?.content?.parts?.[0]?.text);
   } catch (e) {
     console.error(e);
     throw e;
   }
 };
 
-// --- SEO Component ---
+// --- Components ---
 const SEO = ({ title, description, image, url, t }) => {
-  const siteTitle = t('app_name');
-  const fullTitle = title ? `${title} | ${siteTitle}` : siteTitle;
+  const fullTitle = title ? `${title} | ${t('app_name')}` : t('app_name');
   const desc = description || t('seo_desc');
-  const siteUrl = url || window.location.href;
-  const ogImage = image || 'https://placehold.co/1200x630/orange/white?text=MangaX+by+FOMUS';
-
+  const ogImage = image || 'https://placehold.co/1200x630/orange/white?text=MangaX';
   return (
     <Helmet>
-      <title>{fullTitle}</title>
-      <meta name="description" content={desc} />
-      <meta property="og:type" content="website" />
-      <meta property="og:title" content={fullTitle} />
-      <meta property="og:description" content={desc} />
-      <meta property="og:image" content={ogImage} />
-      <meta property="og:url" content={siteUrl} />
-      <meta property="og:site_name" content={siteTitle} />
-      <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:title" content={fullTitle} />
-      <meta name="twitter:description" content={desc} />
-      <meta name="twitter:image" content={ogImage} />
+      <title>{fullTitle}</title> <meta name="description" content={desc} /> <meta property="og:title" content={fullTitle} /> <meta property="og:description" content={desc} /> <meta property="og:image" content={ogImage} />
     </Helmet>
   );
 };
 
-// --- Components ---
 const InstallPrompt = ({ t }) => {
   const [show, setShow] = useState(true);
   if (!show) return null;
@@ -484,7 +546,7 @@ const InstallPrompt = ({ t }) => {
       </div>
       <div className="flex items-center gap-3">
         <button
-          onClick={() => alert('Browser install prompt')}
+          onClick={() => alert('Install prompt triggered')}
           className="bg-white text-orange-600 text-xs font-bold px-3 py-1.5 rounded-full shadow-sm hover:bg-gray-100"
         >
           GET
@@ -684,10 +746,7 @@ const MangaStudioView = ({ t }) => {
               </div>
               <h3 className="text-xl font-bold text-gray-800 mb-2">{t('order_complete_title')}</h3>
               <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-wrap mb-8">{t('order_complete_msg')}</p>
-              <button
-                onClick={() => setStep(1)}
-                className="bg-gray-900 text-white font-bold py-3 px-8 rounded-full shadow-lg"
-              >
+              <button onClick={() => setStep(1)} className="bg-gray-900 text-white font-bold py-3 px-8 rounded-full shadow-lg">
                 {t('back_to_home')}
               </button>
             </div>
@@ -903,7 +962,7 @@ const SeriesCard = ({ series, onClick, t, rank }) => (
   </div>
 );
 
-const SupportStoreView = ({ series, onBack, userId, chapters, t }) => {
+const SupportStoreView = ({ series, onBack, userId, chapters, t, isDemo }) => {
   const [loading, setLoading] = useState(false);
   const [shopName, setShopName] = useState('');
   const [shopLink, setShopLink] = useState('');
@@ -912,7 +971,9 @@ const SupportStoreView = ({ series, onBack, userId, chapters, t }) => {
   const [takenChapters, setTakenChapters] = useState([]);
   const latestChapterNum = chapters.length > 0 ? Math.max(...chapters.map((c) => c.number)) : 0;
   const sponsorableRange = [0, 1, 2, 3, 4].map((i) => latestChapterNum + i).filter((n) => n > 0);
+
   useEffect(() => {
+    if (isDemo) return;
     const q = query(
       collection(db, 'artifacts', APP_ID, 'public', 'data', 'requests'),
       where('seriesId', '==', series.id),
@@ -922,7 +983,8 @@ const SupportStoreView = ({ series, onBack, userId, chapters, t }) => {
       setTakenChapters(snapshot.docs.map((d) => d.data().targetChapterNumber));
     });
     return unsub;
-  }, [series.id]);
+  }, [series.id, isDemo]);
+
   const handleImageSelect = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -937,6 +999,11 @@ const SupportStoreView = ({ series, onBack, userId, chapters, t }) => {
   const handlePurchase = async () => {
     if (!shopName || !shopLink || images.length < 1 || !targetChapter) return alert('Required');
     if (!confirm(t('purchase_confirm'))) return;
+    if (isDemo) {
+      alert('Demo: Payment simulated.');
+      onBack();
+      return;
+    }
     setLoading(true);
     try {
       await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'requests'), {
@@ -1072,7 +1139,7 @@ const SupportStoreView = ({ series, onBack, userId, chapters, t }) => {
   );
 };
 
-const ReaderView = ({ chapter, series, onBack, t, isPremium, onOpenPremium }) => {
+const ReaderView = ({ chapter, series, onBack, t, isPremium, onOpenPremium, isDemo }) => {
   const [pages, setPages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showUI, setShowUI] = useState(true);
@@ -1085,6 +1152,14 @@ const ReaderView = ({ chapter, series, onBack, t, isPremium, onOpenPremium }) =>
   const scrollContainerRef = useRef(null);
   const direction = series.direction === 'ltr' ? 'ltr' : 'rtl';
   useEffect(() => {
+    if (isDemo) {
+      setPages([
+        'https://placehold.co/800x1200/white/black?text=Page+1',
+        'https://placehold.co/800x1200/white/black?text=Page+2',
+      ]);
+      setLoading(false);
+      return;
+    }
     if (chapter.usePageCollection) {
       const q = query(
         collection(db, 'artifacts', APP_ID, 'public', 'data', 'pages'),
@@ -1107,7 +1182,8 @@ const ReaderView = ({ chapter, series, onBack, t, isPremium, onOpenPremium }) =>
     } else {
       setLoading(false);
     }
-  }, [chapter, series.id]);
+  }, [chapter, series.id, isDemo]);
+
   const handleTranslate = async () => {
     if (!isPremium) {
       onOpenPremium();
@@ -1126,6 +1202,7 @@ const ReaderView = ({ chapter, series, onBack, t, isPremium, onOpenPremium }) =>
   };
   const handleReaction = async (type) => {
     setReactions((prev) => ({ ...prev, [type]: prev[type] + 1 }));
+    if (isDemo) return;
     const chapterRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'chapters', chapter.id);
     const field = type === 'like' ? 'likes' : 'fires';
     await updateDoc(chapterRef, { [field]: increment(1) });
@@ -1135,19 +1212,14 @@ const ReaderView = ({ chapter, series, onBack, t, isPremium, onOpenPremium }) =>
   const handleShare = async () => {
     if (navigator.share) {
       try {
-        await navigator.share({
-          title: series.title,
-          text: `${series.title} #MangaX`,
-          url: window.location.href,
-        });
+        await navigator.share({ title: series.title, text: `${series.title} #MangaX`, url: window.location.href });
       } catch (error) {}
     } else {
       setShowShare(true);
     }
   };
   const hasSponsor = !!episodeSponsor;
-  if (loading)
-    return <div className="fixed inset-0 bg-black text-white flex items-center justify-center">Loading...</div>;
+  if (loading) return <div className="fixed inset-0 bg-black text-white flex items-center justify-center">Loading...</div>;
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col h-full w-full">
       <ShareModal
@@ -1342,11 +1414,7 @@ const DetailView = ({ series, onBack, onRead, chapters, history, onOpenStore, t 
   const handleShare = async () => {
     if (navigator.share) {
       try {
-        await navigator.share({
-          title: series.title,
-          text: `${series.title} #MangaX`,
-          url: window.location.href,
-        });
+        await navigator.share({ title: series.title, text: `${series.title} #MangaX`, url: window.location.href });
       } catch (error) {}
     } else {
       setShowShare(true);
@@ -1397,573 +1465,4 @@ const DetailView = ({ series, onBack, onRead, chapters, history, onOpenStore, t 
           className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-600 text-white font-bold py-2 px-4 rounded-lg shadow-md flex items-center justify-center gap-2 transform active:scale-95 transition-transform"
         >
           <Crown size={18} className="text-yellow-300" />
-          <span className="drop-shadow-sm">{t('support_btn')}</span>
-        </button>
-        <p className="text-xs text-gray-600 mt-3 leading-relaxed line-clamp-3">{series.description || '...'}</p>
-      </div>
-      <div className="flex border-b border-gray-200 mt-4 sticky top-0 bg-white z-10 shadow-sm">
-        <button
-          onClick={() => setActiveTab('chapters')}
-          className={`flex-1 py-3 text-sm font-bold text-center relative transition-colors ${
-            activeTab === 'chapters' ? 'text-orange-600' : 'text-gray-500 hover:text-gray-800'
-          }`}
-        >
-          {t('chapter_list')}
-          {activeTab === 'chapters' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-orange-600" />}
-        </button>
-        <button
-          onClick={() => setActiveTab('info')}
-          className={`flex-1 py-3 text-sm font-bold text-center relative transition-colors ${
-            activeTab === 'info' ? 'text-orange-600' : 'text-gray-500 hover:text-gray-800'
-          }`}
-        >
-          {t('work_detail')}
-          {activeTab === 'info' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-orange-600" />}
-        </button>
-      </div>
-      {activeTab === 'chapters' && (
-        <div className="p-0">
-          <div className="flex justify-between items-center px-4 py-3 bg-gray-50 text-xs text-gray-500">
-            <span>Total {chapters.length}</span>
-            <span className="text-orange-600 font-bold">
-              {historyItem ? `${t('continue_reading')}: #${nextChapter?.number}` : ''}
-            </span>
-          </div>
-          {sortedChapters.map((chapter) => {
-            const isRead = historyItem && historyItem.chapterNumber >= chapter.number;
-            return (
-              <div
-                key={chapter.id}
-                className={`flex gap-3 p-3 border-b border-gray-100 cursor-pointer transition-colors ${
-                  isRead ? 'bg-gray-50/50' : 'bg-white hover:bg-gray-50'
-                }`}
-                onClick={() => onRead(chapter)}
-              >
-                <div className="w-24 h-16 bg-gray-200 rounded overflow-hidden flex-shrink-0 relative group">
-                  <img
-                    src={chapter.thumbnailUrl || series.coverUrl}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  {isRead && (
-                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center text-white text-[10px] font-bold">
-                      {t('read_finished')}
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 flex flex-col justify-center">
-                  <div className={`text-sm font-bold ${isRead ? 'text-gray-500' : 'text-gray-800'}`}>#{chapter.number}</div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-gray-400">{chapter.publishDate || '2025/11/20'}</span>
-                    <span className="text-[10px] text-red-400 bg-red-50 px-1 rounded flex items-center gap-0.5">
-                      <Heart size={8} /> {chapter.likes || 0}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center">
-                  <span className="text-blue-500 text-[10px] border border-blue-500 px-2 py-0.5 rounded font-medium">Free</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      {nextChapter && (
-        <div className="fixed bottom-20 left-0 right-0 px-4 flex justify-center z-20 pointer-events-none animate-slide-up">
-          <button
-            onClick={() => onRead(nextChapter)}
-            className="bg-orange-600 text-white font-bold py-3 px-12 rounded-full shadow-lg shadow-orange-500/30 pointer-events-auto hover:bg-orange-700 active:scale-95 transition-all transform flex items-center gap-2"
-          >
-            <BookOpen size={18} />
-            {historyItem ? t('continue_reading') : t('read_from_start')}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const AdminView = ({ onBack, userId, t }) => {
-  const [seriesList, setSeriesList] = useState([]);
-  const [mode, setMode] = useState('dashboard');
-  const [selectedSeriesId, setSelectedSeriesId] = useState(null);
-  const [requests, setRequests] = useState([]);
-  const [title, setTitle] = useState('');
-  const [author, setAuthor] = useState('');
-  const [coverUrl, setCoverUrl] = useState('');
-  const [desc, setDesc] = useState('');
-  const [chapNumber, setChapNumber] = useState('');
-  const [authorNote, setAuthorNote] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [selectedImages, setSelectedImages] = useState([]);
-  const [readingDir, setReadingDir] = useState('rtl');
-  const [language, setLanguage] = useState('ja');
-
-  useEffect(() => {
-    if (!userId) return;
-    const q = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'series'), orderBy('updatedAt', 'desc'));
-    onSnapshot(q, (snapshot) => {
-      const all = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      setSeriesList(all.filter((s) => s.createdBy === userId));
-    });
-    const qReq = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'requests'), orderBy('createdAt', 'desc'));
-    onSnapshot(qReq, (snap) => setRequests(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
-  }, [userId]);
-
-  const handleImageSelect = async (e) => {
-    const files = Array.from(e.target.files);
-    const processed = [];
-    for (const f of files) processed.push(await compressImage(f));
-    setSelectedImages(processed);
-  };
-  const removeImage = (index) => {
-    const newImages = [...selectedImages];
-    newImages.splice(index, 1);
-    setSelectedImages(newImages);
-  };
-  const handleCreateSeries = async () => {
-    if (!title) return;
-    await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'series'), {
-      title,
-      author,
-      coverUrl,
-      description: desc,
-      updatedAt: serverTimestamp(),
-      createdBy: userId,
-      isNew: true,
-      totalLikes: 0,
-      status: 'pending',
-      direction: readingDir,
-      language: language,
-    });
-    alert(t('apply_msg'));
-    setMode('list');
-    setTitle('');
-    setAuthor('');
-    setCoverUrl('');
-    setDesc('');
-  };
-  const handleAddChapter = async () => {
-    if (!selectedImages.length) return;
-    const chapterRef = await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'chapters'), {
-      seriesId: selectedSeriesId,
-      number: Number(chapNumber),
-      publishedAt: serverTimestamp(),
-      title: `Ep ${chapNumber}`,
-      usePageCollection: true,
-      thumbnailUrl: selectedImages[0],
-      authorNote: authorNote,
-      likes: 0,
-      fires: 0,
-    });
-    const batch = writeBatch(db);
-    selectedImages.forEach((imgData, index) => {
-      const pageRef = doc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'pages'));
-      batch.set(pageRef, { chapterId: chapterRef.id, index: index, imageUrl: imgData });
-    });
-    await batch.commit();
-    setMode('list');
-    setChapNumber('');
-    setSelectedImages([]);
-    setAuthorNote('');
-  };
-  const demoApprove = async (id) => {
-    await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'series', id), { status: 'approved' });
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center sticky top-0 z-20">
-        <button onClick={onBack}>
-          <ChevronLeft />
-        </button>
-        <h2 className="font-bold text-gray-800">{t('admin_title')}</h2>
-      </div>
-      <div className="flex bg-white border-b border-gray-200 overflow-x-auto">
-        <button
-          onClick={() => setMode('dashboard')}
-          className={`flex-1 py-3 text-xs font-bold whitespace-nowrap ${
-            mode === 'dashboard' ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-400'
-          }`}
-        >
-          {t('tab_dashboard')}
-        </button>
-        <button
-          onClick={() => setMode('list')}
-          className={`flex-1 py-3 text-xs font-bold whitespace-nowrap ${
-            mode === 'list' ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-400'
-          }`}
-        >
-          {t('tab_works')}
-        </button>
-        <button
-          onClick={() => setMode('requests')}
-          className={`flex-1 py-3 text-xs font-bold whitespace-nowrap ${
-            mode === 'requests' ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-400'
-          }`}
-        >
-          {t('tab_requests')}
-        </button>
-        <button
-          onClick={() => setMode('studio')}
-          className={`flex-1 py-3 text-xs font-bold whitespace-nowrap ${
-            mode === 'studio' ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-400'
-          }`}
-        >
-          {t('tab_studio')}
-        </button>
-      </div>
-      <div className="p-4">
-        {mode === 'dashboard' && <CreatorDashboard requests={requests} seriesList={seriesList} t={t} />}
-        {mode === 'list' && (
-          <div className="space-y-4">
-            <div className="bg-blue-50 p-3 rounded text-xs text-blue-700 flex items-start gap-2">
-              <AlertCircle size={14} className="mt-0.5" />
-              {t('free_registration')}
-            </div>
-            <button
-              onClick={() => setMode('newSeries')}
-              className="w-full bg-orange-600 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2"
-            >
-              <Plus size={20} /> {t('create_new_series')}
-            </button>
-            <div className="space-y-2">
-              {seriesList.map((s) => (
-                <div key={s.id} className="bg-white p-3 rounded-lg shadow-sm border border-gray-100 flex gap-3">
-                  <div className="w-12 h-16 bg-gray-200 rounded flex-shrink-0 overflow-hidden">
-                    <img src={s.coverUrl} className="w-full h-full object-cover" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between">
-                      <div className="font-bold text-sm">{s.title}</div>
-                      <span
-                        className={`text-[10px] px-2 py-0.5 rounded h-fit ${
-                          s.status === 'approved'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-yellow-100 text-yellow-700'
-                        }`}
-                      >
-                        {s.status === 'approved' ? t('status_approved') : t('status_pending')}
-                      </span>
-                    </div>
-                    <div className="flex gap-2 mt-2">
-                      <button
-                        onClick={() => {
-                          setSelectedSeriesId(s.id);
-                          setMode('newChapter');
-                        }}
-                        className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded font-bold"
-                      >
-                        + Ep
-                      </button>
-                      {s.status !== 'approved' && (
-                        <button
-                          onClick={() => demoApprove(s.id)}
-                          className="text-xs bg-gray-200 text-gray-500 px-2 py-1 rounded"
-                        >
-                          Demo: Approve
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {mode === 'requests' && (
-          <div className="space-y-2">
-            {requests.map((r) => (
-              <div key={r.id} className="bg-white p-3 rounded shadow">
-                <div className="font-bold">${r.price}</div>
-                <div className="text-xs text-gray-500">{r.shopName}</div>
-              </div>
-            ))}
-          </div>
-        )}
-        {mode === 'studio' && <MangaStudioView t={t} />}
-        {(mode === 'newSeries' || mode === 'newChapter') && (
-          <div className="bg-white p-4 rounded shadow">
-            <h3 className="font-bold mb-2">{mode === 'newSeries' ? t('create_new_series') : t('upload_chapter')}</h3>
-            {mode === 'newSeries' && (
-              <>
-                <input
-                  className="border p-2 w-full mb-2"
-                  placeholder={t('title')}
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                />
-                <input
-                  className="border p-2 w-full mb-2"
-                  placeholder={t('author')}
-                  value={author}
-                  onChange={(e) => setAuthor(e.target.value)}
-                />
-                <div className="flex gap-2 mb-2">
-                  <select
-                    className="border p-2 w-1/2 rounded"
-                    value={readingDir}
-                    onChange={(e) => setReadingDir(e.target.value)}
-                  >
-                    <option value="rtl">{t('dir_rtl')}</option>
-                    <option value="ltr">{t('dir_ltr')}</option>
-                  </select>
-                  <select
-                    className="border p-2 w-1/2 rounded"
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
-                  >
-                    <option value="ja">{t('lang_ja')}</option>
-                    <option value="en">{t('lang_en')}</option>
-                  </select>
-                </div>
-                <input
-                  className="border p-2 w-full mb-2"
-                  placeholder={t('cover_url')}
-                  value={coverUrl}
-                  onChange={(e) => setCoverUrl(e.target.value)}
-                />
-                <textarea
-                  className="border p-2 w-full mb-2 h-20"
-                  placeholder={t('desc')}
-                  value={desc}
-                  onChange={(e) => setDesc(e.target.value)}
-                />
-              </>
-            )}
-            {mode === 'newChapter' && (
-              <>
-                <input
-                  className="border p-2 w-full mb-2"
-                  placeholder={t('chapter_num')}
-                  value={chapNumber}
-                  onChange={(e) => setChapNumber(e.target.value)}
-                />
-                <textarea
-                  className="border p-2 w-full mb-2 h-20"
-                  placeholder={t('author_note')}
-                  value={authorNote}
-                  onChange={(e) => setAuthorNote(e.target.value)}
-                />
-              </>
-            )}
-            <div className="border-2 dashed p-4 text-center relative">
-              <input type="file" multiple className="absolute inset-0 opacity-0" onChange={handleImageSelect} />
-              <Upload className="mx-auto" />
-            </div>
-            <button
-              onClick={mode === 'newSeries' ? handleCreateSeries : handleAddChapter}
-              className="w-full bg-orange-600 text-white py-2 mt-2 font-bold"
-            >
-              {t('create')}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [isPremium, setIsPremium] = useState(false);
-  const [view, setView] = useState('home');
-  const [showPremiumModal, setShowPremiumModal] = useState(false);
-  const [selectedSeries, setSelectedSeries] = useState(null);
-  const [selectedChapter, setSelectedChapter] = useState(null);
-  const [activeTab, setActiveTab] = useState('home');
-  const [homeTab, setHomeTab] = useState('latest');
-  const [seriesData, setSeriesData] = useState([]);
-  const [chaptersData, setChaptersData] = useState([]);
-  const [history, setHistory] = useState([]);
-  const [lang, setLang] = useState('ja');
-  const t = (key) => RESOURCES[lang][key] || key;
-  const toggleLang = () => setLang((prev) => (prev === 'ja' ? 'en' : 'ja'));
-
-  useEffect(() => {
-    if (!isConfigured) {
-      console.error(RESOURCES.ja.config_error_msg);
-      return;
-    }
-    const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else {
-        await signInAnonymously(auth);
-      }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, async (u) => {
-      setUser(u);
-      if (u) {
-        setHistory(getRecentHistory(u.uid));
-        const userRef = doc(db, 'artifacts', APP_ID, 'users', u.uid, 'profile', 'status');
-        const docSnap = await getDoc(userRef);
-        if (docSnap.exists() && docSnap.data().isPremium) {
-          setIsPremium(true);
-        }
-      }
-    });
-    return () => unsubscribe();
-  }, []);
-
-  const handleSubscribe = async () => {
-    if (!user) return;
-    const userRef = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'profile', 'status');
-    await setDoc(userRef, { isPremium: true }, { merge: true });
-    setIsPremium(true);
-    setShowPremiumModal(false);
-    alert('Premium activated.');
-  };
-  useEffect(() => {
-    if (!user) return;
-    const q = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'series'), orderBy('updatedAt', 'desc'));
-    onSnapshot(q, (snap) => setSeriesData(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
-  }, [user]);
-  useEffect(() => {
-    if (!user || !selectedSeries) return;
-    const q = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'chapters'));
-    onSnapshot(q, (snap) =>
-      setChaptersData(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((c) => c.seriesId === selectedSeries.id))
-    );
-  }, [user, selectedSeries]);
-  const goDetail = (series) => {
-    setSelectedSeries(series);
-    setView('detail');
-  };
-  const goReader = (chapter) => {
-    saveHistory(user.uid, selectedSeries.id, chapter.id, chapter.number, selectedSeries.title);
-    setHistory(getRecentHistory(user.uid));
-    setSelectedChapter(chapter);
-    setView('reader');
-  };
-  const publicSeries = seriesData.filter((s) => s.status === 'approved');
-  const rankingData = [...publicSeries].sort((a, b) => (b.totalLikes || 0) - (a.totalLikes || 0));
-  const displayData = homeTab === 'ranking' ? rankingData : publicSeries;
-
-  if (!isConfigured)
-    return (
-      <div className="flex h-screen items-center justify-center text-red-600 font-bold p-4 text-center">
-        設定未完了
-        <br />
-        <span className="text-xs font-normal text-gray-600">コード内の FIREBASE_CONFIG にキーを設定してください</span>
-      </div>
-    );
-  if (!user) return <div className="flex h-screen items-center justify-center text-orange-600 font-bold animate-pulse">Loading...</div>;
-
-  return (
-    <div className="bg-white min-h-screen text-gray-900 font-sans max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-gray-100">
-      <HelmetProvider>
-        <SEO t={t} />
-        <PremiumModal
-          isOpen={showPremiumModal}
-          onClose={() => setShowPremiumModal(false)}
-          onSubscribe={handleSubscribe}
-          t={t}
-        />
-        {view === 'admin' ? (
-          <AdminView onBack={() => setView('home')} userId={user.uid} t={t} />
-        ) : view === 'reader' && selectedChapter ? (
-          <ReaderView
-            chapter={selectedChapter}
-            series={selectedSeries}
-            onBack={() => setView('detail')}
-            t={t}
-            isPremium={isPremium}
-            onOpenPremium={() => setShowPremiumModal(true)}
-          />
-        ) : view === 'store' && selectedSeries ? (
-          <SupportStoreView series={selectedSeries} onBack={() => setView('detail')} userId={user.uid} chapters={chaptersData} t={t} />
-        ) : view === 'partners' ? (
-          <PlatformSponsorView onBack={() => setView('home')} t={t} />
-        ) : view === 'detail' && selectedSeries ? (
-          <DetailView
-            series={selectedSeries}
-            chapters={chaptersData}
-            onBack={() => setView('home')}
-            onRead={goReader}
-            history={history}
-            onOpenStore={() => setView('store')}
-            t={t}
-          />
-        ) : (
-          <div className="pb-20">
-            <header className="bg-white text-gray-900 px-4 py-3 flex justify-between items-center sticky top-0 z-30 border-b border-gray-100/80 backdrop-blur-md bg-white/90">
-              <div className="flex items-center gap-2">
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
-                    isPremium ? 'bg-yellow-500 text-black' : 'bg-gray-200 text-gray-500'
-                  }`}
-                >
-                  {isPremium ? <Crown size={16} /> : <User size={16} />}
-                </div>
-                <div>
-                  <div className="text-[10px] text-gray-400">{isPremium ? t('subscribed') : t('guest_label')}</div>
-                  <div className="text-xs font-bold">{t('guest_name')}</div>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={toggleLang}
-                  className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-full text-xs font-bold text-gray-600 hover:bg-gray-200"
-                >
-                  <Globe size={14} /> {lang === 'ja' ? 'EN' : 'JP'}
-                </button>
-                {!isPremium && (
-                  <button
-                    onClick={() => setShowPremiumModal(true)}
-                    className="bg-yellow-500 text-black text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 animate-pulse"
-                  >
-                    <Crown size={12} /> UPGRADE
-                  </button>
-                )}
-                <button onClick={() => setView('admin')} className="text-gray-400 p-1">
-                  <Settings size={20} />
-                </button>
-              </div>
-            </header>
-            <div className="p-4">
-              <div className="bg-gradient-to-r from-orange-500 to-red-600 h-36 rounded-2xl flex items-center justify-center text-white font-bold shadow-lg relative overflow-hidden mb-4">
-                <div className="z-10 text-center">
-                  <div className="text-3xl italic tracking-tighter">{t('app_name')}</div>
-                  <div className="text-[10px] bg-black/20 inline-block px-3 py-1 rounded-full backdrop-blur-sm mt-1">{t('app_tagline')}</div>
-                </div>
-              </div>
-              <div className="flex border-b border-gray-200 mb-4">
-                <button
-                  onClick={() => setHomeTab('latest')}
-                  className={`flex-1 pb-3 text-sm font-bold text-center relative ${
-                    homeTab === 'latest' ? 'text-orange-600' : 'text-gray-400'
-                  }`}
-                >
-                  {t('tab_latest')}
-                  {homeTab === 'latest' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-orange-600" />}
-                </button>
-                <button
-                  onClick={() => setHomeTab('ranking')}
-                  className={`flex-1 pb-3 text-sm font-bold text-center relative ${
-                    homeTab === 'ranking' ? 'text-yellow-500' : 'text-gray-400'
-                  }`}
-                >
-                  {t('tab_ranking')}
-                  {homeTab === 'ranking' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-yellow-500" />}
-                </button>
-              </div>
-              {displayData.map((series, idx) => (
-                <SeriesCard
-                  key={series.id}
-                  series={series}
-                  onClick={goDetail}
-                  t={t}
-                  rank={homeTab === 'ranking' ? idx + 1 : null}
-                />
-              ))}
-              {displayData.length === 0 && <div className="p-8 text-center text-gray-400 text-sm">No series found</div>}
-              <InstallPrompt t={t} />
-            </div>
-            <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} t={t} />
-          </div>
-        )}
-      </HelmetProvider>
-    </div>
-  );
-}
+          <span className="drop-shadow-sm">{t('support_btn')}
